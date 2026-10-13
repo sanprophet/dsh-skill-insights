@@ -252,3 +252,35 @@ ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
 5. junction 已建立：`profiles\desktop\node_modules\dsh-skill-insights` → `C:\Users\CSYANGA\Desktop\dsh-skill-insights`；`profiles\desktop\package.json` 已加入依赖与 bundles。
 
 **未验证**：路由 `/skill-insights/summary` 的实际返回与面板渲染 —— 需要重启 DSH 才会加载新 bundle。
+
+---
+
+## 10. 开源发布形态
+
+从"本机私有插件"改成"可发布、可开源"的正式包：
+
+| 改动 | 内容 |
+|---|---|
+| 去掉 `private: true` | 否则 npm 拒绝发布 |
+| 补元数据 | `license: MIT`、`author`、`repository` / `bugs` / `homepage`、9 个 `keywords`（含 `dsh-plugin`，市场靠它检索）、`publishConfig.access: public` |
+| `engines` | `node: ^22.19.0 \|\| >=24.0.0`、`dsh: >=0.1.5-rc.2` |
+| `files` | 加上 `README.zh.md`、`CHANGELOG.md`；`check-client.mjs` 与 `DESIGN.md` 刻意**不发布**（前者是开发检查，后者是内部设计文档） |
+| `LICENSE` | MIT，版权人 CSYANGA |
+| `README.md` + `README.zh.md` | 英文为主（npm 落地页 + GitHub 门面），中文保留 |
+| `CHANGELOG.md` | 带社区约定的 **DSH 版本兼容表** —— 这是这个生态应对版本漂移的实际做法 |
+| `.gitignore` + `.gitattributes` | 后者统一 LF，避免 Windows 协作者把整个文件重写成 CRLF |
+| git 仓库 | `main` 分支，首次提交已完成；**per-repo** 身份设为 `sanprophet / yangchaosan1@163.com`，避免全局配置里的工作邮箱进入公开提交历史 |
+
+`engines.dsh` 是**社区约定，不是启动器校验的字段** —— 官方 schema 只读 `bundle` / `profile` / `client`。所以版本兼容性同时写进 README 与 CHANGELOG 的验证表，不能只靠这一个字段。
+
+**发布前的完整验证**（全部通过）：
+
+| 检查 | 结果 |
+|---|---|
+| `node index.js` / `node check-client.mjs` | 通过 |
+| `npm pack --dry-run` | 11 个文件，`check-client.mjs` / `DESIGN.md` 正确排除，`LICENSE` 自动带上 |
+| 打包 → 装进干净目录 → 从**装好的副本**运行 | 三个检查全部通过 |
+| 清单里每个 `dsh.bundle.patch` / `icon` / `exports` 目标 | 在装好的副本里都存在 |
+| 从 profile 目录 `import('dsh-skill-insights')` | 解析成功，导出 `name` / `apply` / `countSkills` |
+
+最后一条最要紧：它证明了 **`files` 是完整的** —— 这正是只有第一个安装的人才会撞上的那类 bug。
