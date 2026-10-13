@@ -51,6 +51,8 @@ window.__ModuleLoader__.load({
       showUnused: '显示未使用的技能',
       skill: '技能',
       source: '来源',
+      srcBuiltin: '内置',
+      srcLocal: '本机',
       calls: '调用次数',
       split: '模型 / 用户',
       sessions: '会话数',
@@ -95,6 +97,8 @@ window.__ModuleLoader__.load({
       showUnused: 'Show unused skills',
       skill: 'Skill',
       source: 'Source',
+      srcBuiltin: 'Bundled',
+      srcLocal: 'Local',
       calls: 'Calls',
       split: 'Model / User',
       sessions: 'Sessions',
@@ -132,7 +136,7 @@ window.__ModuleLoader__.load({
   --si-fs-xs: 12px;
   --si-fs-sm: 13px;
   --si-fs-md: 14px;
-  --si-fs-xl: 28px;
+  --si-fs-xl: 22px;
   --si-num: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   /* The one accent every focus ring, bar and active glyph shares.
      NOT --dsw-alias-brand-primary: in the default theme that resolves to
@@ -150,8 +154,8 @@ window.__ModuleLoader__.load({
 }
 
 /* ---- header ---- */
-.ui-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
-.ui-title { font-size: 19px; line-height: 26px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.005em; }
+.ui-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.ui-title { font-size: 18px; line-height: 24px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.005em; }
 .ui-subtitle { font-size: var(--si-fs-xs); line-height: 18px; color: var(--dsw-alias-label-tertiary); margin: 0; }
 .ui-actions { display: flex; align-items: center; gap: 10px; }
 
@@ -169,27 +173,31 @@ window.__ModuleLoader__.load({
 /* ---- kpi strip ---- */
 /* One ruled strip rather than four floating cards: it keeps the grid edge
    aligned with the table below, and the hairlines give the numbers a rhythm
-   that separate boxes did not. */
+   that separate boxes did not. Flex, not a fixed 4-column grid, because the
+   strip drops the orphan cell entirely when the count is zero — a metric that
+   reports "nothing happened" does not deserve a quarter of the panel. */
 .ui-kpis {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
   border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
-  background: var(--dsw-alias-bg-layer-1); margin-bottom: 16px; overflow: hidden;
+  background: var(--dsw-alias-bg-layer-1); margin-bottom: 12px; overflow: hidden;
 }
-.ui-kpi { padding: 14px 18px 15px; border-left: 0.5px solid var(--dsw-alias-border-l1); }
+.ui-kpi { flex: 1 1 0; min-width: 0; padding: 11px 14px 12px; border-left: 0.5px solid var(--dsw-alias-border-l1); }
 .ui-kpi:first-child { border-left: 0; }
-.ui-kpi-label { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); margin-bottom: 8px; }
+.ui-kpi-label { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); margin-bottom: 4px; }
 .ui-kpi-value {
   font-size: var(--si-fs-xl); line-height: 1; font-weight: 600;
   font-family: var(--si-num); font-variant-numeric: tabular-nums;
 }
-.ui-kpi-sub { font-size: var(--si-fs-2xs); line-height: 16px; color: var(--dsw-alias-label-tertiary); margin-top: 8px; }
+.ui-kpi-sub { font-size: var(--si-fs-2xs); line-height: 15px; color: var(--dsw-alias-label-tertiary); margin-top: 5px; }
+/* The one KPI that is a problem rather than a statistic announces itself. */
+.ui-kpi.is-alert .ui-kpi-value { color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-label-primary)); }
 
 /* ---- card + toolbar ---- */
 .ui-card {
   border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
-  background: var(--dsw-alias-bg-layer-1); padding: 14px 18px 4px; margin-bottom: 16px;
+  background: var(--dsw-alias-bg-layer-1); padding: 12px 16px 2px; margin-bottom: 14px;
 }
-.ui-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.ui-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 /* Bounded: a search field stretched across the whole card reads as unfinished. */
 .ui-input {
   flex: 0 1 380px; min-width: 160px; font: inherit; font-size: var(--si-fs-sm);
@@ -226,10 +234,10 @@ window.__ModuleLoader__.load({
   box-shadow: inset 0 -0.5px 0 var(--dsw-alias-border-l1);
   text-align: right; font-weight: 500; font-size: var(--si-fs-2xs);
   color: var(--dsw-alias-label-tertiary);
-  padding: 8px 10px; white-space: nowrap;
+  padding: 6px 10px; white-space: nowrap;
 }
 .ui-table td {
-  text-align: right; padding: 9px 10px; vertical-align: middle;
+  text-align: right; padding: 7px 10px; vertical-align: middle;
   border-bottom: 0.5px solid var(--dsw-alias-border-l1);
   font-variant-numeric: tabular-nums;
   transition: background-color .18s ease;
@@ -242,13 +250,13 @@ window.__ModuleLoader__.load({
    only. Left to share the remainder equally, the six numeric columns each get
    ~94px and the timestamp wraps onto two lines, which doubles every row height.
    Hiding a column at a narrow width simply redistributes the slack. */
-.ui-table th:nth-child(1) { width: 44%; }
-.ui-table th:nth-child(2) { width: 9%; }
+.ui-table th:nth-child(1) { width: 46%; }
+.ui-table th:nth-child(2) { width: 7%; }
 .ui-table th:nth-child(3) { width: 9%; }
 .ui-table th:nth-child(4) { width: 9%; }
-.ui-table th:nth-child(5) { width: 7%; }
-.ui-table th:nth-child(6) { width: 14%; }
-.ui-table th:nth-child(7) { width: 8%; }
+.ui-table th:nth-child(5) { width: 6%; }
+.ui-table th:nth-child(6) { width: 13%; }
+.ui-table th:nth-child(7) { width: 10%; }
 .ui-table td.ui-col-last { white-space: nowrap; }
 
 .ui-skill { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
@@ -284,7 +292,10 @@ window.__ModuleLoader__.load({
 /* The call count, drawn over a share bar. The bar restates the number, never
    replaces it, so nothing here depends on colour alone. */
 .ui-calls-wrap { position: relative; display: flex; align-items: center; justify-content: flex-end; width: 100%; max-width: 86px; margin-left: auto; padding: 2px 6px; box-sizing: border-box; }
-.ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--si-accent); opacity: .16; }
+/* .26, not .16: the bar is the only thing that carries "which skill matters"
+   between rows whose numbers are 4 and 1. At .16 the rows all read as equal
+   weight and the column stopped doing its job. */
+.ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--si-accent); opacity: .26; }
 .ui-calls-num { position: relative; font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-sm); }
 
 /* ---- trend ---- */
@@ -323,7 +334,9 @@ window.__ModuleLoader__.load({
 @media (max-width: 900px) {
   .ui-inner { padding: 20px 18px 40px; }
   .ui-col-source, .ui-col-sessions { display: none; }
-  .ui-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ui-kpis { flex-wrap: wrap; }
+  .ui-kpi { flex: 1 1 42%; border-left: 0; border-top: 0.5px solid var(--dsw-alias-border-l1); }
+  .ui-kpi:nth-child(-n+2) { border-top: 0; }
   .ui-kpi:nth-child(odd) { border-left: 0; }
   .ui-kpi:nth-child(n + 3) { border-top: 0.5px solid var(--dsw-alias-border-l1); }
 }
@@ -335,6 +348,23 @@ window.__ModuleLoader__.load({
 
     function formatCount(value) {
       return (Number(value) || 0).toLocaleString()
+    }
+
+    /**
+     * Where a skill came from, in words.
+     *
+     * The registry says `bundled` for skills shipped with DSH and leaves the
+     * field empty for everything found under the local skill roots. Printing that
+     * empty string as `—` was worse than useless: a dash in that column is
+     * indistinguishable from "unknown", which is precisely what the orphan badge
+     * next to the name already means. Anything genuinely unrecognised keeps its
+     * raw value rather than being guessed at.
+     */
+    function sourceLabel(row, t) {
+      if (row.cataloged === false) return '—'
+      if (row.source === 'bundled') return t('srcBuiltin')
+      if (!row.source || row.source === 'user-agents') return t('srcLocal')
+      return row.source
     }
 
     /** `1712345678901` -> `10月9日 14:03` / `Oct 9, 14:03`. */
@@ -459,10 +489,10 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function Kpi({ label, value, sub }) {
+    function Kpi({ label, value, sub, alert }) {
       return h(
         'div',
-        { className: 'ui-kpi' },
+        { className: alert ? 'ui-kpi is-alert' : 'ui-kpi' },
         h('div', { className: 'ui-kpi-label' }, label),
         h('div', { className: 'ui-kpi-value' }, value),
         sub ? h('div', { className: 'ui-kpi-sub' }, sub) : null,
@@ -614,14 +644,19 @@ window.__ModuleLoader__.load({
           value: formatCount(totals.calls),
           sub: format(t('kpiCallsSub'), { model: formatCount(totals.model), user: formatCount(totals.user) }),
         }),
-        // Rendered even at zero: a card that vanishes reflows the strip, and the
-        // grid is meant to be a stable frame you learn once.
-        h(Kpi, {
-          key: 'orphans',
-          label: t('kpiOrphans'),
-          value: formatCount(totals.orphans),
-          sub: format(t('kpiOrphansSub'), { calls: formatCount(totals.orphanCalls) }),
-        }),
+        // Rendered only when there is something to report. A zero here is the
+        // healthy case, and a permanent quarter-panel reading "0" was the single
+        // biggest source of dead space in the strip; when it does appear it is
+        // coloured as a problem, so the panel gets louder exactly when it should.
+        totals.orphans > 0
+          ? h(Kpi, {
+              key: 'orphans',
+              label: t('kpiOrphans'),
+              value: formatCount(totals.orphans),
+              sub: format(t('kpiOrphansSub'), { calls: formatCount(totals.orphanCalls) }),
+              alert: true,
+            })
+          : null,
       )
 
       const warning =
@@ -710,7 +745,7 @@ window.__ModuleLoader__.load({
                         ),
                       ),
                     ),
-                    h('td', { className: 'ui-source ui-col-source' }, row.source || '—'),
+                    h('td', { className: 'ui-source ui-col-source' }, sourceLabel(row, t)),
                     h(
                       'td',
                       { className: calls === 0 ? 'ui-calls is-zero' : 'ui-calls' },
