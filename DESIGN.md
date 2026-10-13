@@ -357,6 +357,21 @@ ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
 因此字号收敛为五级固定阶：`--si-fs-2xs` 11 / `--si-fs-xs` 12 / `--si-fs-sm` 13 / `--si-fs-md` 14 /
 `--si-fs-xl` 28，不再出现 12.5 / 11.5 / 10.5 这类随手值。边框全部换成 `0.5px`。
 
+**强调色不是 `brand-primary`。** 这是个反直觉但已核实的坑：
+
+| token | 解析值 | 用途 |
+|---|---|---|
+| `--dsw-alias-brand-primary` | **`#0f1115`** = `neutral-bluish-1000` | 就是正文色。**拿它当强调色等于没强调** |
+| `--dsw-alias-state-business-primary` | **`#4176e6`** = `deepseek-500` | DeepSeek 蓝，DSH 自己用于焦点环与选中强调 |
+| `--dsw-alias-link` / `--dsw-alias-button-info-fill` | `#4176e6` | 链接 / info 按钮 |
+| `--dsw-alias-brand-primary-new-colorprimary-new-color` | `#5686fe` | 名字是生成产物，**不要用** |
+
+依据：在 `@deepseek-ai` 全树检索 `state-business-primary`，DSH 用它做 `:focus-visible` 的 outline
+（`dsh-client-ui-settings-plugins`、`-workflow-run`、`-trajectory`）、cordis 工具卡片的图标与标题、
+会话里的技能 chip、日程状态点、todo 进度环。全部 13 个"有彩色值的 alias"里，它是唯一语义上表示
+"主要强调"的那一个。因此面板内统一为 `--si-accent`，侧栏图标处直接写 token（图标渲染在侧栏，
+不在 `.ui-page` 子树内，取不到 `--si-accent`）。
+
 ### 11.3 表格
 
 - **行高节奏（旧面板最难看的地方）**：描述固定单行省略，并且**始终渲染**、用 `min-height: 16px` 预留行高。

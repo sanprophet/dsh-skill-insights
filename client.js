@@ -134,6 +134,12 @@ window.__ModuleLoader__.load({
   --si-fs-md: 14px;
   --si-fs-xl: 28px;
   --si-num: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  /* The one accent every focus ring, bar and active glyph shares.
+     NOT --dsw-alias-brand-primary: in the default theme that resolves to
+     #0f1115, i.e. the same near-black as body text, so an accent built on it
+     is invisible. --dsw-alias-state-business-primary is the DeepSeek blue and
+     is what DSH itself uses for focus rings and selection emphasis. */
+  --si-accent: var(--dsw-alias-state-business-primary, var(--dsw-alias-brand-primary));
   height: 100%; overflow: auto;
   background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
 }
@@ -157,7 +163,7 @@ window.__ModuleLoader__.load({
   cursor: pointer; transition: background-color .18s ease, border-color .18s ease;
 }
 .ui-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); border-color: var(--dsw-alias-border-l4); }
-.ui-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.ui-btn:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 2px; }
 .ui-btn:disabled { opacity: .5; cursor: default; }
 
 /* ---- kpi strip ---- */
@@ -192,15 +198,15 @@ window.__ModuleLoader__.load({
   background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
   transition: border-color .18s ease;
 }
-.ui-input:focus { border-color: var(--dsw-alias-brand-primary); }
-.ui-input:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.ui-input:focus { border-color: var(--si-accent); }
+.ui-input:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 1px; }
 .ui-check {
   display: inline-flex; align-items: center; gap: 7px; font-size: var(--si-fs-xs);
   color: var(--dsw-alias-label-secondary); cursor: pointer; user-select: none;
   padding: 4px 2px; border-radius: 6px; margin-left: auto;
 }
-.ui-check:focus-within { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
-.ui-check input { accent-color: var(--dsw-alias-brand-primary); cursor: pointer; margin: 0; }
+.ui-check:focus-within { outline: 2px solid var(--si-accent); outline-offset: 2px; }
+.ui-check input { accent-color: var(--si-accent); cursor: pointer; margin: 0; }
 
 /* ---- table ---- */
 /* The page is the vertical scroller, not this card, so the header can stick to
@@ -260,12 +266,12 @@ window.__ModuleLoader__.load({
 /* The call count, drawn over a share bar. The bar restates the number, never
    replaces it, so nothing here depends on colour alone. */
 .ui-calls-wrap { position: relative; display: inline-flex; align-items: center; justify-content: flex-end; width: 78px; padding: 2px 6px; box-sizing: border-box; }
-.ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--dsw-alias-brand-primary); opacity: .16; }
+.ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--si-accent); opacity: .16; }
 .ui-calls-num { position: relative; font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-sm); }
 
 /* ---- trend ---- */
 .ui-spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 18px; }
-.ui-spark i { display: block; width: 3px; border-radius: 1px; background: var(--dsw-alias-brand-primary); }
+.ui-spark i { display: block; width: 3px; border-radius: 1px; background: var(--si-accent); }
 .ui-spark i[data-empty="true"] { background: var(--dsw-alias-border-l2); height: 2px; }
 .ui-trend-none { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
 
@@ -290,7 +296,7 @@ window.__ModuleLoader__.load({
 .ui-footer code { font-family: var(--si-num); }
 .ui-basis { margin-top: 8px; }
 .ui-basis summary { cursor: pointer; border-radius: 6px; width: fit-content; padding: 1px 0; }
-.ui-basis summary:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.ui-basis summary:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 2px; }
 .ui-basis-text { margin: 6px 0 0; max-width: 76ch; }
 
 /* ---- narrow layouts ---- */
@@ -354,9 +360,25 @@ window.__ModuleLoader__.load({
       return 'en'
     }
 
-    /** The sidebar glyph: one sparkle for the skill, a smaller one for its use. */
+    /**
+     * The sidebar glyph: one sparkle for the skill, a smaller one for its use.
+     *
+     * Deliberately NOT a pure `currentColor` glyph. The host marks the selected
+     * row only by switching text colour, and in the collapsed rail it sets every
+     * row to `--dsw-alias-label-primary`, so a glyph that merely inherits looks
+     * identical whether this panel is open or not.
+     *
+     * The accent is `state-business-primary`, NOT `brand-primary`: the latter
+     * resolves to #0f1115 in the default theme — literally the body-text colour
+     * — so an "accent" built on it is indistinguishable from the inactive state.
+     * The token is spelled out here rather than reusing the panel's `--si-accent`
+     * because this glyph renders in the SIDEBAR, outside `.ui-page`, where that
+     * variable is not in scope.
+     */
     function SkillIcon({ size, active }) {
       const unit = size || 18
+      const style = { display: 'block', opacity: active ? 1 : 0.72 }
+      if (active) style.color = 'var(--dsw-alias-state-business-primary, var(--dsw-alias-brand-primary))'
       return h(
         'svg',
         {
@@ -364,7 +386,7 @@ window.__ModuleLoader__.load({
           width: unit,
           height: unit,
           'aria-hidden': true,
-          style: { display: 'block', opacity: active ? 1 : 0.72 },
+          style,
         },
         h('path', {
           d: 'M11 3C11.5 7.9 14.6 10.2 19.5 11.5C14.6 12.8 11.5 15.1 11 20C10.5 15.1 7.4 12.8 2.5 11.5C7.4 10.2 10.5 7.9 11 3Z',

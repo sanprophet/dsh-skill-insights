@@ -38,6 +38,17 @@
 - KPI 从四张独立卡片改成一条带竖分隔线的整条，右边缘与表格对齐。
 - 页脚压成一行，长说明收进「统计口径」折叠项。
 - 搜索框宽度受控；新增 `prefers-reduced-motion` 保护。
+- **强调色改用 `--dsw-alias-state-business-primary`**：`--dsw-alias-brand-primary` 在默认主题里解析为
+  `#0f1115`，也就是正文色本身，拿它当强调色等于没有强调。侧栏图标选中时现在会变成 DeepSeek 蓝；
+  面板内的焦点环、占比条、趋势柱也统一走同一个 token。（`dsh-client-ui-theme` 里 13 个有彩色值的 alias
+  中，`state-business-primary = #4176e6` 正是 DSH 自己用于焦点环与选中强调的那一个。）
+
+### 侧栏图标
+
+侧栏条目的图标原来只跟随 `currentColor`：宿主只在**展开**时把 `color` 从 `label-secondary` 换成
+`label-primary`，而**折叠成窄轨**时会 `.collapsed .panelRow { color: var(--dsw-alias-label-primary) }`
+—— 该规则在样式表里更靠后、权重相同，于是覆盖掉 `panelActive`，导致窄轨下所有行同色，图标无论选中与否
+都长一样。现在选中态显式取强调色，两种形态下都能区分。
 
 ## 0.1.1
 
