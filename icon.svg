@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <rect x="3" y="3" width="18" height="3" rx="1.5" fill="#7c3aed"/>
-  <rect x="3" y="10.5" width="12" height="3" rx="1.5" fill="#7c3aed" opacity="0.72"/>
-  <rect x="3" y="18" width="7" height="3" rx="1.5" fill="#7c3aed" opacity="0.45"/>
+  <!-- A skill, plus the smaller companion spark that marks it as used. -->
+  <path d="M11 3C11.5 7.9 14.6 10.2 19.5 11.5C14.6 12.8 11.5 15.1 11 20C10.5 15.1 7.4 12.8 2.5 11.5C7.4 10.2 10.5 7.9 11 3Z" fill="#7c3aed"/>
+  <path d="M19.6 15.2C19.8 17.4 20.8 18.4 23 18.6C20.8 18.8 19.8 19.8 19.6 22C19.4 19.8 18.4 18.8 16.2 18.6C18.4 18.4 19.4 17.4 19.6 15.2Z" fill="#7c3aed" opacity="0.5"/>
 </svg>

@@ -143,7 +143,7 @@ index.js              host：扫描器 + 路由（唯一有逻辑的文件）
 client.js             手写浏览器 bundle：侧栏项 + 主面板
 locale/zh.json        面板显示名（插件管理页用）
 locale/en.json
-icon.svg              沿用兄弟插件的图标风格
+icon.svg              四角星（skill）+ 小伴星，与兄弟插件的柱状图区分
 README.md             配置项与已知限制
 DESIGN.md             本文件
 ```
@@ -155,15 +155,32 @@ export const name = 'skill-insights'
 export const inject = []
 ```
 
-沿用兄弟插件的写法：不硬声明 `inject`，而是用 `ctx.inject([...])` 逐个守卫（它的 `index.js:424`）。理由一致——这套 composition 里缺某个服务时插件应该降级，而不是整个不挂载。
+插件本身不硬声明数据依赖，缺服务时仍然挂载、面板照常打开——沿用兄弟插件的写法（它的 `index.js:424`）。
+
+但**扫描器不能裸读 `ctx.sessionQuery` / `ctx.skills`**。cordis 里读一个本上下文未声明的服务是**抛异常**
+（`cannot get property "sessionQuery" without inject`），不是返回 `undefined`；异常又会被扫描器自己的
+catch 吞掉，于是首扫必失败、`state.json` 永不写出、接口恒返回 `generatedAt: 0` 的空快照——0.1.0 的真实故障，
+面板上只表现为"什么都是 0"。
+
+正确写法是让扫描器借一个**声明过这两个服务**的子上下文：
+
+```js
+ctx.inject(['sessionQuery', 'skills'], (dataCtx) => {
+  dataCtx.effect(() => { /* mkdir → loadCache → scan(dataCtx) → setInterval */ }, 'skill-insights: scanner')
+})
+```
+
+这样两个目的同时满足：缺服务时插件仍挂载（回调不触发，面板是空的而不是消失），有服务时读取合法。
+`scan()` 及其两个 scanner 都以这个 `dataCtx` 为参数，不再闭包捕获插件自身的 `ctx`。
 
 - 启动：`mkdir` 数据目录 → 读缓存（`loadCache`，坏了就当作空）→ 立刻首扫 → 起 `setInterval`。
-- 扫描器 `scan()`：
-  - `const records = await ctx.sessionQuery.listSessions()`；一个会话读失败 → `failed += 1` 后 `continue`，绝不让整轮扫描抛出去。
+- 扫描器 `scan(dataCtx)`：
+  - `const records = await dataCtx.sessionQuery.listSessions()`；一个会话读失败 → `failed += 1` 后 `continue`，绝不让整轮扫描抛出去。
   - 对每个 `record.header.id` 调 `readSession(id)`，`countSkills(events)` 累加到总会话表。
-  - 目录：按 2.1 的 cwd 并集调 `ctx.skills.snapshot({ cwd })`。
+  - 目录：按 2.1 的 cwd 并集调 `dataCtx.skills.snapshot({ cwd })`。
   - 组装 `{ generatedAt, catalog, usage, uninstalled, totals, tracked }` 整体替换内存快照，然后异步写缓存。
-  - 定时器的异步 tick 必须吞掉自身异常（`void scan().catch(() => {})`）——timer 回调 reject 会杀掉整个应用，这点兄弟插件的注释已经写明。
+    **先发布、后落盘**，所以任何"看到 `generatedAt > 0` 就断言缓存文件已存在"的调用方都要轮询文件，而不是假设 rename 已经完成。
+  - 定时器的异步 tick 必须吞掉自身异常（`void scan(dataCtx).catch(() => {})`）——timer 回调 reject 会杀掉整个应用，这点兄弟插件的注释已经写明。
 - 路由：`GET /skill-insights/summary`，同源、回环、`cache-control: no-store`。返回上面那个快照，含 `catalog`（全量 skill 目录）与 `usage`（按 `calls` 降序）两份，客户端做合并。
 - 配置：`scanIntervalSeconds`（默认 300，范围 10–3600）、`includeUserInvocations`（默认 true）、`includeFailedCalls`（默认 false）。
 

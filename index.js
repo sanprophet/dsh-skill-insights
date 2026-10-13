@@ -168,7 +168,7 @@ export function countSkills(events) {
  * the scan: one corrupt log must not blank the whole panel.
  */
 async function scanUsage(ctx, config) {
-  const result = { counts: {}, sessions: 0, failed: 0, malformed: 0, cwds: [] }
+  const result = { counts: {}, sessions: 0, failed: 0, malformed: 0, cwds: [], refs: [] }
   const query = ctx.sessionQuery
   if (!query || typeof query.listSessions !== 'function') return result
 
@@ -184,9 +184,10 @@ async function scanUsage(ctx, config) {
   for (const record of records) {
     const header = record && record.header
     if (!header || typeof header.id !== 'string') continue
-    if (typeof header.cwd === 'string' && header.cwd && !seenCwds.has(header.cwd)) {
-      seenCwds.add(header.cwd)
-      result.cwds.push(header.cwd)
+    const cwd = str(header.cwd)
+    if (cwd && !seenCwds.has(cwd)) {
+      seenCwds.add(cwd)
+      result.cwds.push(cwd)
     }
 
     let snapshot
@@ -196,6 +197,10 @@ async function scanUsage(ctx, config) {
       result.failed += 1
       continue
     }
+
+    // Reused below for the session-addressed catalog, which resolves its
+    // agent-preset scope from the session id rather than from this cwd.
+    result.refs.push({ id: header.id, cwd })
 
     const counted = countSkills(snapshot && snapshot.events)
     result.sessions += 1
@@ -218,53 +223,133 @@ async function scanUsage(ctx, config) {
 }
 
 /**
- * Resolve the skill catalog across every workspace that has a session.
+ * Fold one catalog observation into the merged table.
  *
- * `ctx.skills.snapshot()` is cwd-sensitive, and a host-level plugin has no
- * agent scope, so the only honest answer is the union over the workspaces this
- * machine has actually worked in. User-level skills (the common case) collapse
- * to one entry because they resolve identically for every cwd.
+ * A name can arrive twice — once from a session's resolved catalog and once from
+ * the global registry layer — so the merge keeps the first description, ORs the
+ * invocation flags, upgrades placeholder metadata when the richer source
+ * arrives, and records every workspace the skill resolved in.
  */
-async function scanCatalog(ctx, cwds) {
-  const skills = ctx.skills
-  if (!skills || typeof skills.snapshot !== 'function') return { list: [], complete: false }
+function upsertSkill(byName, skill, cwd) {
+  const existing = byName.get(skill.name)
+  if (existing) {
+    if (!existing.description && skill.description) existing.description = skill.description
+    if (!existing.source && skill.source) {
+      existing.source = skill.source
+      existing.provider = skill.provider
+    }
+    if (skill.modelInvocable) existing.modelInvocable = true
+    if (skill.userInvocable) existing.userInvocable = true
+    if (cwd && !existing.cwds.includes(cwd)) existing.cwds.push(cwd)
+    return
+  }
+  byName.set(skill.name, { ...skill, cwds: cwd ? [cwd] : [] })
+}
 
-  const roots = cwds.length > 0 ? cwds : ['']
+/**
+ * Resolve the skill catalog. Two sources, because neither is sufficient alone.
+ *
+ * 1. `ctx.sessionSkillCatalog.list({ sessionId })` is the authoritative one.
+ *    The registry is LAYERED PER AGENT-PRESET SCOPE, and `dsh-skill-filesystem`
+ *    — the provider that discovers skills from this machine's skill roots —
+ *    registers into a preset layer, not the global one. That service resolves
+ *    the session's scope for us without activating a cold agent, which is the
+ *    only way a host-level plugin can see those skills at all.
+ *
+ * 2. `ctx.skills.snapshot()` reads the GLOBAL layer ALONE. It misses every
+ *    locally discovered skill, but it is where deployment-level
+ *    (bundled/repository) entries live, and it is the only source carrying real
+ *    `source`/`provider` metadata, so it runs second and enriches.
+ *
+ * Getting this wrong is not subtle: with source 1 missing, every installed
+ * skill reports as "uninstalled" — which is exactly what happened before this
+ * was found.
+ */
+async function scanCatalog(ctx, refs, cwds) {
   const byName = new Map()
   let complete = true
+  let sawScoped = false
 
-  for (const cwd of roots) {
-    let snapshot
+  // `ctx.get` without `strict` returns undefined for an absent service instead
+  // of throwing, which is exactly the optional read wanted here.
+  const scoped = typeof ctx.get === 'function' ? ctx.get('sessionSkillCatalog') : undefined
+  if (scoped && typeof scoped.list === 'function') {
+    const controller = new AbortController()
     try {
-      snapshot = await skills.snapshot(cwd ? { cwd } : undefined)
-    } catch {
-      complete = false
-      continue
-    }
-    if (!snapshot || !Array.isArray(snapshot.skills)) {
-      complete = false
-      continue
-    }
-    if (snapshot.complete === false) complete = false
-
-    for (const skill of snapshot.skills) {
-      if (!skill || typeof skill.name !== 'string') continue
-      const existing = byName.get(skill.name)
-      if (existing) {
-        if (cwd && !existing.cwds.includes(cwd)) existing.cwds.push(cwd)
-        continue
+      for (const ref of refs) {
+        let value
+        try {
+          value = await scoped.list({ sessionId: ref.id }, controller.signal)
+        } catch {
+          // A session whose composition cannot be resolved is counted, never
+          // fatal: one odd session must not blank the whole catalog.
+          complete = false
+          continue
+        }
+        sawScoped = true
+        const entries = value && Array.isArray(value.skills) ? value.skills : []
+        for (const entry of entries) {
+          if (!entry || typeof entry.name !== 'string') continue
+          // No source/provider on this shape; the global read supplies them
+          // when the skill is also visible there.
+          upsertSkill(
+            byName,
+            {
+              name: entry.name,
+              description: str(entry.description),
+              source: '',
+              provider: '',
+              modelInvocable: entry.modelInvocable !== false,
+              userInvocable: true,
+            },
+            ref.cwd,
+          )
+        }
       }
-      byName.set(skill.name, {
-        name: skill.name,
-        description: str(skill.description),
-        source: str(skill.source),
-        provider: str(skill.provider),
-        modelInvocable: skill.invocation ? skill.invocation.modelInvocable !== false : true,
-        userInvocable: skill.invocation ? skill.invocation.userInvocable !== false : true,
-        cwds: cwd ? [cwd] : [],
-      })
+    } finally {
+      controller.abort()
     }
   }
+
+  const skills = ctx.skills
+  const canSnapshot = Boolean(skills && typeof skills.snapshot === 'function')
+  if (canSnapshot) {
+    const roots = cwds.length > 0 ? cwds : ['']
+    for (const cwd of roots) {
+      let snapshot
+      try {
+        snapshot = await skills.snapshot(cwd ? { cwd } : undefined)
+      } catch {
+        complete = false
+        continue
+      }
+      if (!snapshot || !Array.isArray(snapshot.skills)) {
+        complete = false
+        continue
+      }
+      if (snapshot.complete === false) complete = false
+
+      for (const skill of snapshot.skills) {
+        if (!skill || typeof skill.name !== 'string') continue
+        upsertSkill(
+          byName,
+          {
+            name: skill.name,
+            description: str(skill.description),
+            source: str(skill.source),
+            provider: str(skill.provider),
+            modelInvocable: skill.invocation ? skill.invocation.modelInvocable !== false : true,
+            userInvocable: skill.invocation ? skill.invocation.userInvocable !== false : true,
+          },
+          cwd,
+        )
+      }
+    }
+  }
+
+  // Neither path usable: mark the catalog incomplete so the panel warns rather
+  // than labelling every used skill "uninstalled".
+  if (!sawScoped && !canSnapshot) complete = false
 
   return { list: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)), complete }
 }
@@ -417,7 +502,6 @@ export function apply(ctx, rawConfig) {
   const cacheFile = join(dataDir, 'state.json')
 
   let snapshot = emptySnapshot()
-  let timer
 
   const log = (level, message) => {
     try {
@@ -427,41 +511,53 @@ export function apply(ctx, rawConfig) {
     }
   }
 
-  async function scan() {
-    const usage = await scanUsage(ctx, config)
-    const catalog = await scanCatalog(ctx, usage.cwds)
+  async function scan(dataCtx) {
+    const usage = await scanUsage(dataCtx, config)
+    const catalog = await scanCatalog(dataCtx, usage.refs, usage.cwds)
     snapshot = buildSnapshot(catalog, usage, home)
     await saveCache(cacheFile, snapshot)
     return snapshot
   }
 
-  ctx.effect(() => {
-    ;(async () => {
-      try {
-        await mkdir(dataDir, { recursive: true })
-        const cached = await loadCache(cacheFile)
-        if (cached) snapshot = cached
-        const fresh = await scan()
-        log(
-          'info',
-          `catalog ${fresh.totals.skills} skill(s), ${fresh.totals.used} used, ` +
-            `${fresh.totals.calls} call(s) over ${fresh.totals.sessions} session(s)`,
-        )
-      } catch (error) {
-        log('warn', `initialization failed: ${error instanceof Error ? error.message : String(error)}`)
-      }
-    })()
+  // `sessionQuery` and `skills` belong to sibling plugins, and reading a service
+  // this context never declared THROWS (`cannot get property "..." without
+  // inject`) instead of returning undefined. So the scanner borrows a context
+  // that may legally read both: taking the pair through `ctx.inject` keeps the
+  // panel mounted — and serving an empty snapshot — in a composition that lacks
+  // one of them, while the read itself stays legal.
+  try {
+    ctx.inject(['sessionQuery', 'skills'], (dataCtx) => {
+      dataCtx.effect(() => {
+        ;(async () => {
+          try {
+            await mkdir(dataDir, { recursive: true })
+            const cached = await loadCache(cacheFile)
+            if (cached) snapshot = cached
+            const fresh = await scan(dataCtx)
+            log(
+              'info',
+              `catalog ${fresh.totals.skills} skill(s), ${fresh.totals.used} used, ` +
+                `${fresh.totals.calls} call(s) over ${fresh.totals.sessions} session(s)`,
+            )
+          } catch (error) {
+            log('warn', `initialization failed: ${error instanceof Error ? error.message : String(error)}`)
+          }
+        })()
 
-    // A timer callback that throws or rejects is fatal to the whole application,
-    // so every asynchronous tick swallows its own failure.
-    timer = setInterval(() => {
-      void scan().catch(() => {})
-    }, config.scanIntervalSeconds * 1000)
+        // A timer callback that throws or rejects is fatal to the whole
+        // application, so every asynchronous tick swallows its own failure.
+        const tick = setInterval(() => {
+          void scan(dataCtx).catch(() => {})
+        }, config.scanIntervalSeconds * 1000)
 
-    return () => {
-      clearInterval(timer)
-    }
-  }, 'skill-insights: scanner')
+        return () => {
+          clearInterval(tick)
+        }
+      }, 'skill-insights: scanner')
+    })
+  } catch {
+    /* neither service in this composition: the panel keeps serving an empty snapshot */
+  }
 
   // Served over DSH's own web server, which binds loopback. No separate port,
   // so nothing is exposed to the LAN and no token is needed.

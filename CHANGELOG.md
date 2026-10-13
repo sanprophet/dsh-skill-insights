@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1
+
+修复"面板恒为 0"——0.1.0 的首扫实际上从未成功过。
+
+- `ctx.sessionQuery` / `ctx.skills` 改为经 `ctx.inject(['sessionQuery', 'skills'], …)` 取得一个声明过这两个
+  服务的子上下文再读。0.1.0 里插件 `inject = []` 却裸读这两个服务，cordis 会抛
+  `cannot get property "…" without inject`（不是返回 `undefined`），异常被自身的 catch 吞掉，于是
+  `<DSH_HOME>/skill-insights/state.json` 从未写出，`GET /skill-insights/summary` 一直返回
+  `generatedAt: 0` 的空快照。插件仍然不硬声明 `inject`，缺服务时照旧挂载并显示空面板。
+- `check-host.mjs`：缓存文件改为轮询等待。`scan()` 先发布内存快照、后落盘，判断"首扫完成"之后直接读文件
+  会撞上竞态，只留下一个 `state.json.tmp`。
+- 侧栏图标与插件图标换成四角星（skill）+ 小伴星，不再与兄弟插件的柱状图混淆。
+
 ## 0.1.0
 
 首个发布。

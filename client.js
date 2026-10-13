@@ -203,7 +203,7 @@ window.__ModuleLoader__.load({
       return 'en'
     }
 
-    /** The sidebar glyph: three bars, echoing the counts this panel shows. */
+    /** The sidebar glyph: one sparkle for the skill, a smaller one for its use. */
     function SkillIcon({ size, active }) {
       const unit = size || 18
       return h(
@@ -215,9 +215,15 @@ window.__ModuleLoader__.load({
           'aria-hidden': true,
           style: { display: 'block', opacity: active ? 1 : 0.72 },
         },
-        h('rect', { x: 3, y: 3, width: 18, height: 3, rx: 1.5, fill: 'currentColor' }),
-        h('rect', { x: 3, y: 10.5, width: 12, height: 3, rx: 1.5, fill: 'currentColor', opacity: 0.72 }),
-        h('rect', { x: 3, y: 18, width: 7, height: 3, rx: 1.5, fill: 'currentColor', opacity: 0.45 }),
+        h('path', {
+          d: 'M11 3C11.5 7.9 14.6 10.2 19.5 11.5C14.6 12.8 11.5 15.1 11 20C10.5 15.1 7.4 12.8 2.5 11.5C7.4 10.2 10.5 7.9 11 3Z',
+          fill: 'currentColor',
+        }),
+        h('path', {
+          d: 'M19.6 15.2C19.8 17.4 20.8 18.4 23 18.6C20.8 18.8 19.8 19.8 19.6 22C19.4 19.8 18.4 18.8 16.2 18.6C18.4 18.4 19.4 17.4 19.6 15.2Z',
+          fill: 'currentColor',
+          opacity: 0.5,
+        }),
       )
     }
 
