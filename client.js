@@ -213,7 +213,13 @@ window.__ModuleLoader__.load({
    the top of the viewport. That is also why the table has no horizontal scroll
    wrapper: an overflow container would capture the sticky axis and kill it.
    Narrow layouts drop low-priority columns instead. */
-.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--si-fs-sm); }
+/* table-layout: fixed is load-bearing, not cosmetic. Under the default auto,
+   a white-space: nowrap description contributes its entire sentence as the
+   cell's min-content width, so width: 50% on column one is silently ignored:
+   that column swallows the table and the other six are pushed clean out of the
+   viewport — which reads as a one-column table with text spilling off the card.
+   Fixed layout is what makes the percentage widths and the ellipsis take effect. */
+.ui-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: var(--si-fs-sm); }
 .ui-table th {
   position: sticky; top: 0; z-index: 2;
   background: var(--dsw-alias-bg-layer-1);
@@ -230,8 +236,20 @@ window.__ModuleLoader__.load({
 }
 .ui-table tbody tr:hover td { background: var(--dsw-alias-interactive-bg-hover); }
 .ui-table tbody tr:last-child td { border-bottom: 0; }
-.ui-table th:first-child, .ui-table td:first-child { text-align: left; padding-left: 0; width: 50%; }
+.ui-table th:first-child, .ui-table td:first-child { text-align: left; padding-left: 0; }
 .ui-table th:last-child, .ui-table td:last-child { padding-right: 0; }
+/* Explicit widths: with table-layout: fixed these are read from the header row
+   only. Left to share the remainder equally, the six numeric columns each get
+   ~94px and the timestamp wraps onto two lines, which doubles every row height.
+   Hiding a column at a narrow width simply redistributes the slack. */
+.ui-table th:nth-child(1) { width: 44%; }
+.ui-table th:nth-child(2) { width: 9%; }
+.ui-table th:nth-child(3) { width: 9%; }
+.ui-table th:nth-child(4) { width: 9%; }
+.ui-table th:nth-child(5) { width: 7%; }
+.ui-table th:nth-child(6) { width: 14%; }
+.ui-table th:nth-child(7) { width: 8%; }
+.ui-table td.ui-col-last { white-space: nowrap; }
 
 .ui-skill { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .ui-skill-name {
@@ -265,13 +283,15 @@ window.__ModuleLoader__.load({
 
 /* The call count, drawn over a share bar. The bar restates the number, never
    replaces it, so nothing here depends on colour alone. */
-.ui-calls-wrap { position: relative; display: inline-flex; align-items: center; justify-content: flex-end; width: 78px; padding: 2px 6px; box-sizing: border-box; }
+.ui-calls-wrap { position: relative; display: flex; align-items: center; justify-content: flex-end; width: 100%; max-width: 86px; margin-left: auto; padding: 2px 6px; box-sizing: border-box; }
 .ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--si-accent); opacity: .16; }
 .ui-calls-num { position: relative; font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-sm); }
 
 /* ---- trend ---- */
-.ui-spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 18px; }
-.ui-spark i { display: block; width: 3px; border-radius: 1px; background: var(--si-accent); }
+/* 30 fixed-width bars need 120px, which no longer fits now that the columns are
+   bounded, so the bars share whatever the cell gives them instead. */
+.ui-spark { display: flex; align-items: flex-end; gap: 1px; height: 18px; width: 100%; max-width: 100%; }
+.ui-spark i { display: block; flex: 1 1 0; min-width: 0; border-radius: 1px; background: var(--si-accent); }
 .ui-spark i[data-empty="true"] { background: var(--dsw-alias-border-l2); height: 2px; }
 .ui-trend-none { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
 
@@ -681,7 +701,13 @@ window.__ModuleLoader__.load({
                             ? h('span', { className: 'ui-badge' }, t('modelOnly'))
                             : null,
                         ),
-                        h('div', { className: 'ui-skill-desc' }, row.description || ''),
+                        // The full description stays reachable through the native
+                        // tooltip: truncation is fine, losing the text is not.
+                        h(
+                          'div',
+                          { className: 'ui-skill-desc', title: row.description || undefined },
+                          row.description || '',
+                        ),
                       ),
                     ),
                     h('td', { className: 'ui-source ui-col-source' }, row.source || '—'),

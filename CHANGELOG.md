@@ -43,6 +43,17 @@
   面板内的焦点环、占比条、趋势柱也统一走同一个 token。（`dsh-client-ui-theme` 里 13 个有彩色值的 alias
   中，`state-business-primary = #4176e6` 正是 DSH 自己用于焦点环与选中强调的那一个。）
 
+### 表格塌成一列（严重）
+
+`table-layout` 默认是 `auto`。此时 `white-space: nowrap` 的描述文字会成为单元格的 **min-content
+宽度**，`width: 50%` 被静默忽略 —— 第一列吞掉整张表，其余六列被完全挤出视口，看上去就是"表格只有
+一列、文字冲出卡片"。同时 `max-width: 100%` 在 auto 布局下是循环依赖（元素宽度取决于 `td`，而 `td`
+宽度又取决于内容），所以 `overflow: hidden` 和 `text-overflow: ellipsis` 都形同虚设。
+
+修复：`table-layout: fixed` + 显式列宽（fixed 布局只从表头行读取宽度，因此必须写在 `th` 上）。
+另外给描述加 `title`，让截断不损失信息 —— UX 规范里"截断"只是 Medium 级，但"区分性文字必须能读到
+全文"是 Critical 级。`check-client.mjs` 增加了这三条声明的断言，防止再次静默退化。
+
 ### 侧栏图标
 
 侧栏条目的图标原来只跟随 `currentColor`：宿主只在**展开**时把 `color` 从 `label-secondary` 换成

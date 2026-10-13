@@ -169,6 +169,17 @@ assert.match(ready, /10月13日/, 'last-used timestamp formatted')
 assert.doesNotMatch(ready, /never-used/, 'unused skill hidden by default')
 assert.doesNotMatch(ready, /MISSING:/, 'no locale key is missing')
 
+// The stylesheet travels inside the rendered tree, so the invariants that a
+// DOM-free render check cannot see are still assertable here. These declarations
+// belong together: without `table-layout: fixed`, the nowrap description
+// contributes its whole sentence as column one's min-content width, the other
+// six columns are pushed clean out of the viewport, and the panel reads as a
+// one-column table with text spilling off the card.
+const styleCss = ready.slice(0, ready.indexOf('</style>'))
+assert.ok(styleCss.includes('table-layout: fixed'), 'table uses fixed layout')
+assert.match(styleCss, /\.ui-skill-desc\s*\{[^}]*overflow: hidden/, 'description clips its overflow')
+assert.match(styleCss, /\.ui-skill-desc\s*\{[^}]*text-overflow: ellipsis/, 'description ellipsises')
+
 // A catalog that failed discovery must announce itself.
 assert.match(render([[0, 'zh'], [1, 'ready'], [2, { ...payload, catalogComplete: false }]]), /技能目录可能不完整/)
 
