@@ -85,14 +85,17 @@ const zhKeys = Object.keys(dictionaries.zh).sort()
 const enKeys = Object.keys(dictionaries.en).sort()
 assert.deepEqual(zhKeys, enKeys, 'zh and en expose the same keys')
 
-/** Flatten a fake element tree into a searchable string. `title` is included so
- * the native-tooltip escape hatches (truncated descriptions, absolute timestamps)
- * stay assertable from a DOM-free render. */
+/** Flatten a fake element tree into a searchable string. `title` and `aria-label`
+ * are both included: a tooltip holds text a reader can reach (truncated
+ * descriptions, absolute timestamps), and aria-label names a control that has no
+ * visible label of its own (the two filter selects). Without them the accessible
+ * names would be unassertable from a DOM-free render. */
 function flatten(node) {
   if (node === null || node === undefined || node === false || node === true) return ''
   if (typeof node === 'string' || typeof node === 'number') return String(node)
   if (Array.isArray(node)) return node.map(flatten).join(' ')
-  const attrs = node.props && typeof node.props === 'object' ? ` ${node.props.title || ''}` : ''
+  const props = node.props && typeof node.props === 'object' ? node.props : {}
+  const attrs = ` ${props.title || ''} ${props['aria-label'] || ''}`
   return `${String(node.type)} ${flatten(node.children)}${attrs}`
 }
 
@@ -167,10 +170,19 @@ const ready = render([
 assert.match(ready, /ponytail/, 'used skill rendered')
 assert.match(ready, /ghost-skill/, 'orphan rendered')
 assert.match(ready, /已卸载/, 'orphan badge rendered')
-assert.match(ready, /调用次数/, 'table headers rendered')
+assert.match(ready, /使用次数/, 'table headers rendered')
 assert.match(ready, /今天|昨天|天前/, 'last-used renders a relative age')
 assert.match(ready, /10月13日/, 'absolute timestamp kept as the tooltip')
-assert.doesNotMatch(ready, /never-used/, 'unused skill hidden by default')
+// The default tab is the whole catalog, not just the used skills. The reference
+// opens on 全部, and the counts printed on each tab are what make narrowing
+// cheap — so a tab that displayed a count it did not honour would be worse than
+// no tab at all. Fixture: 2 cataloged + 1 orphan, of which 2 have calls.
+assert.match(ready, /never-used/, 'the default tab shows the whole catalog')
+assert.match(ready, /全部 3/, 'the all tab carries its count')
+assert.match(ready, /使用过 2/, 'the used tab carries its count')
+assert.match(ready, /从未使用 1/, 'the never-used tab carries its count')
+assert.match(ready, /搜索技能名称或说明/, 'the search field is offered')
+assert.match(ready, /使用时间/, 'the last-used filter is offered')
 assert.doesNotMatch(ready, /MISSING:/, 'no locale key is missing')
 
 // The stylesheet travels inside the rendered tree, so the invariants that a
@@ -188,6 +200,18 @@ assert.match(styleCss, /\.ui-skill-desc\s*\{[^}]*text-overflow: ellipsis/, 'desc
 // failure and overlapping the next column is not.
 assert.ok(!/\.ui-table td\.ui-col-last\s*\{[^}]*white-space:\s*nowrap/.test(styleCss), 'last-used does not force nowrap')
 assert.ok(styleCss.includes('ui-tablewrap'), 'table sits in a padded wrap inside the card')
+// The structure the reference added, and the structure it replaced. Both
+// directions are pinned, so a later edit cannot quietly bring back a checkbox
+// that can only say yes or no, or a sparkline that never draws.
+assert.ok(styleCss.includes('ui-tabs') && styleCss.includes('ui-chip'), 'status tabs are rendered')
+assert.ok(styleCss.includes('ui-select'), 'source and time filters are rendered')
+assert.ok(styleCss.includes('ui-calls-track'), 'the call count keeps its share track')
+assert.ok(styleCss.includes('--si-edge'), 'card edges come from a token')
+assert.ok(styleCss.includes('neutral-bluish-50'), 'the light canvas is a theme static')
+assert.ok(!styleCss.includes('ui-toolbar'), 'the old card toolbar is gone')
+assert.ok(!styleCss.includes('ui-check'), 'the show-unused checkbox is gone')
+assert.ok(!styleCss.includes('ui-spark'), 'the sparkline is gone')
+assert.ok(!styleCss.includes('ui-col-split'), 'the split column is gone')
 // A mistyped theme token does not error — var() just falls back, which is how the
 // warning colour went quietly neutral for two releases. Both directions are
 // pinned: the misspelling must not return, the real name must be present.

@@ -37,18 +37,28 @@ window.__ModuleLoader__.load({
     const ROUTE = '/skill-insights/summary'
 
     const zh = {
-      panel: '技能用量',
-      title: '技能用量',
-      subtitle: '本机可用技能清单，以及每个技能被调用了多少次',
-      refresh: '刷新',
+      panel: '技能管理',
+      title: '技能管理',
+      subtitle: '查看本机可解析的每个技能，以及各自被调用了多少次',
+      refresh: '刷新数据',
       refreshing: '刷新中…',
       loading: '正在读取技能用量…',
       empty: '没有匹配的技能。',
       errorTitle: '读取技能用量失败',
       errorHint: '请确认插件已启用并重启过 DSH。错误：{detail}',
       retry: '重试',
-      search: '按名称或描述筛选…',
-      showUnused: '显示未使用的技能',
+      search: '搜索技能名称或说明',
+      filterSource: '来源',
+      filterTime: '使用时间',
+      optAll: '全部',
+      optLocal: '本机',
+      optBuiltin: '内置',
+      optToday: '今天',
+      optWeek: '近 7 天',
+      optMonth: '近 30 天',
+      tabAll: '全部 {count}',
+      tabUsed: '使用过 {count}',
+      tabNever: '从未使用 {count}',
       skill: '技能',
       source: '来源',
       srcBuiltin: '内置',
@@ -57,21 +67,17 @@ window.__ModuleLoader__.load({
       today: '今天',
       yesterday: '昨天',
       daysAgo: '{days} 天前',
-      calls: '调用次数',
-      split: '模型 / 用户',
-      sessions: '会话数',
+      calls: '使用次数',
       lastUsed: '最近使用',
-      trend: '近 30 天',
-      never: '未使用',
-      trendDays: '{days} 天',
-      trendActive: '近 30 天里有 {days} 天发生调用',
+      never: '从未',
+      callsDetail: '模型 {model} 次 · 用户 {user} 次 · 来自 {sessions} 个会话',
       kpiSkills: '可用技能',
       kpiUsed: '用过的技能',
-      kpiCalls: '总调用次数',
+      kpiNever: '从未使用',
       kpiOrphans: '已卸载 / 未知',
-      kpiSkillsSub: '当前可解析的目录',
-      kpiUsedSub: '被调用过至少一次',
-      kpiCallsSub: '{model} 次模型调用 · {user} 次用户调用',
+      kpiSkillsSub: '全部可解析的技能',
+      kpiUsedSub: '共 {calls} 次调用',
+      kpiNeverSub: '适合优先检查',
       kpiOrphansSub: '{calls} 次调用指向已不在目录里的技能',
       orphanBadge: '已卸载',
       modelOnly: '仅模型',
@@ -87,18 +93,28 @@ window.__ModuleLoader__.load({
     }
 
     const en = {
-      panel: 'Skill Usage',
-      title: 'Skill Usage',
-      subtitle: 'Every skill this machine can resolve, and how often each one was used',
-      refresh: 'Refresh',
+      panel: 'Skills',
+      title: 'Skills',
+      subtitle: 'Every skill this machine resolves, and how often each one was called',
+      refresh: 'Refresh data',
       refreshing: 'Refreshing…',
       loading: 'Reading skill usage…',
       empty: 'No skill matches.',
       errorTitle: 'Could not read skill usage',
       errorHint: 'Check that the plugin is enabled and DSH has been restarted. Error: {detail}',
       retry: 'Retry',
-      search: 'Filter by name or description…',
-      showUnused: 'Show unused skills',
+      search: 'Search skill name or description',
+      filterSource: 'Source',
+      filterTime: 'Last used',
+      optAll: 'All',
+      optLocal: 'Local',
+      optBuiltin: 'Bundled',
+      optToday: 'Today',
+      optWeek: 'Last 7 days',
+      optMonth: 'Last 30 days',
+      tabAll: 'All {count}',
+      tabUsed: 'Used {count}',
+      tabNever: 'Never used {count}',
       skill: 'Skill',
       source: 'Source',
       srcBuiltin: 'Bundled',
@@ -108,20 +124,16 @@ window.__ModuleLoader__.load({
       yesterday: 'Yesterday',
       daysAgo: '{days}d ago',
       calls: 'Calls',
-      split: 'Model / User',
-      sessions: 'Sessions',
       lastUsed: 'Last used',
-      trend: 'Last 30 days',
       never: 'Never',
-      trendDays: '{days}d',
-      trendActive: 'Used on {days} days in the last 30',
+      callsDetail: '{model} model · {user} user · across {sessions} sessions',
       kpiSkills: 'Available skills',
       kpiUsed: 'Skills used',
-      kpiCalls: 'Total calls',
+      kpiNever: 'Never used',
       kpiOrphans: 'Uninstalled / unknown',
-      kpiSkillsSub: 'resolvable right now',
-      kpiUsedSub: 'called at least once',
-      kpiCallsSub: '{model} model · {user} user',
+      kpiSkillsSub: 'everything resolvable',
+      kpiUsedSub: '{calls} calls in total',
+      kpiNeverSub: 'worth a look first',
       kpiOrphansSub: '{calls} calls name a skill no longer in the catalog',
       orphanBadge: 'uninstalled',
       modelOnly: 'model only',
@@ -164,13 +176,15 @@ window.__ModuleLoader__.load({
    bg-base AND bg-layer-1 to the same pure white in light mode, so layer-1 cards
    on a bg-base page were white on white, separated by a 0.5px line and nothing
    else. Dark separates them (#151517 vs #232324) which is why dark always read
-   better. neutral-bluish-100 is DSH's own static for a canvas behind white
-   surfaces and is nearly the exact grey of the reference design. It is applied
-   through body:not([data-ds-dark-theme]) so a future rename of the dark
-   attribute can only ever lose the grey — never paint a light grey over dark. */
+   better. neutral-bluish-50 is DSH's own static for a canvas behind white
+   surfaces. The reference design is restrained here — its page measures
+   rgb(247,248,250) against a pure-white card — so the grey stays a whisper and
+   the card edge does the separating. It is applied through
+   body:not([data-ds-dark-theme]) so a future rename of the dark attribute can
+   only ever lose the grey — never paint a light grey over dark mode. */
 .ui-page { --si-canvas: var(--dsw-alias-bg-base); }
 body:not([data-ds-dark-theme]) .ui-page {
-  --si-canvas: var(--dsw-static-neutral-bluish-100, var(--dsw-alias-bg-base));
+  --si-canvas: var(--dsw-static-neutral-bluish-50, var(--dsw-alias-bg-base));
 }
 .ui-inner { max-width: 1200px; margin: 0 auto; padding: 26px 32px 52px; box-sizing: border-box; }
 
@@ -215,6 +229,17 @@ body:not([data-ds-dark-theme]) .ui-page {
 .ui-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); border-color: var(--dsw-alias-border-l4); }
 .ui-btn:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 2px; }
 .ui-btn:disabled { opacity: .5; cursor: default; }
+/* The primary action is the solid dark button the reference uses. label-primary
+   is the darkest ink in this theme and bg-base is its inverse, which is the same
+   pair the selected tab uses — so the two strongest signals on the page agree. */
+.ui-btn-primary {
+  background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-base);
+  border-color: var(--dsw-alias-label-primary); font-weight: 500;
+}
+.ui-btn-primary:hover:not(:disabled) {
+  background: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-label-primary);
+  opacity: .88;
+}
 
 /* ---- surfaces ---- */
 /* One elevation declaration per surface, as the craft floor asks. The shadow is
@@ -223,7 +248,10 @@ body:not([data-ds-dark-theme]) .ui-page {
    hairline is what keeps a white card crisp at its edges. */
 .ui-page {
   --si-card: var(--dsw-alias-bg-layer-1);
-  --si-lift: var(--dsw-shadow-lv1, 0 2px 4px 0 #0000000d);
+  /* The edge, not a shadow. The reference separates its white surfaces with a
+     visible hairline; at a canvas this close to white a 4% border disappears and
+     the page goes flat again, which was the original complaint. l2 is 10% black. */
+  --si-edge: var(--dsw-alias-border-l2);
 }
 
 /* ---- stats ---- */
@@ -231,14 +259,15 @@ body:not([data-ds-dark-theme]) .ui-page {
    top, table below. Flex rather than a fixed grid so the strip still drops the
    orphan cell when it is zero — a metric that reports "nothing happened" does
    not deserve a quarter of the panel. */
-.ui-kpis {
-  display: flex;
-  border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
-  background: var(--si-card); box-shadow: var(--si-lift);
-  margin-bottom: 14px; overflow: hidden;
+/* Three separate cards with a gap between them, not one card cut by dividers.
+   That is how the reference draws its stat row, and it lets each number keep its
+   own surface when the row wraps on a narrow window. */
+.ui-kpis { display: flex; gap: 10px; margin-bottom: 12px; }
+.ui-kpi {
+  flex: 1 1 0; min-width: 0; padding: 13px 16px 14px;
+  border: 0.5px solid var(--si-edge); border-radius: 12px;
+  background: var(--si-card);
 }
-.ui-kpi { flex: 1 1 0; min-width: 0; padding: 13px 16px 14px; border-left: 0.5px solid var(--dsw-alias-border-l1); }
-.ui-kpi:first-child { border-left: 0; }
 .ui-kpi-label { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary); margin-bottom: 5px; }
 .ui-kpi-value {
   font-size: 22px; line-height: 1; font-weight: 600;
@@ -258,36 +287,63 @@ body:not([data-ds-dark-theme]) .ui-page {
    ancestor — the page, which is what we want. Any clipping-based tidy-up here
    would silently kill the sticky header. The frame is closed with padding. */
 .ui-card {
-  border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
-  background: var(--si-card); box-shadow: var(--si-lift); margin-bottom: 14px;
+  border: 0.5px solid var(--si-edge); border-radius: 12px;
+  background: var(--si-card); margin-bottom: 14px;
 }
-/* A real card header with a hairline under it, rather than a search box floating
-   in the card's padding — the difference between a table and a data surface. */
-.ui-toolbar {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 10px 14px; border-bottom: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 13px 13px 0 0;
+/* ---- tabs + filters ---- */
+/* Status tabs that carry their own counts, not a "show unused" checkbox. The
+   count is the point: it says how big each bucket is before you spend a click on
+   it, and it is what makes the panel's answer actionable. They sit on the canvas
+   above the card, the way the reference draws them — inside the card they would
+   read as part of the table. */
+.ui-tabs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.ui-chip {
+  appearance: none; font: inherit; font-size: var(--si-fs-xs); line-height: 18px;
+  padding: 6px 14px; border-radius: 999px;
+  border: 0.5px solid var(--si-edge);
+  background: var(--si-card); color: var(--dsw-alias-label-primary);
+  cursor: pointer; font-variant-numeric: tabular-nums;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease;
 }
+.ui-chip:hover:not(.is-active) { background: var(--dsw-alias-interactive-bg-hover); }
+.ui-chip:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 2px; }
+/* The selected chip is the solid inverse rather than accent blue: blue is already
+   the colour of every bar below it, and a blue chip competes with them. */
+.ui-chip.is-active {
+  background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-base);
+  border-color: var(--dsw-alias-label-primary); font-weight: 500;
+}
+
+.ui-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ui-input {
+  flex: 1 1 240px; min-width: 170px; font: inherit; font-size: var(--si-fs-sm);
+  padding: 7px 12px; border-radius: 8px; box-sizing: border-box;
+  border: 0.5px solid var(--si-edge);
+  background: var(--si-card); color: var(--dsw-alias-label-primary);
+  transition: border-color .18s ease;
+}
+.ui-input::placeholder { color: var(--dsw-alias-label-secondary); }
+.ui-input:focus { border-color: var(--si-accent); }
+.ui-input:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 1px; }
+/* A native select, restyled to sit beside the search field. appearance: none plus
+   two gradient wedges is the whole custom arrow — no icon font, no background
+   image, and the wedges are painted in currentColor so they follow the theme. */
+.ui-select {
+  font: inherit; font-size: var(--si-fs-sm); padding: 7px 30px 7px 12px;
+  border-radius: 8px; border: 0.5px solid var(--si-edge);
+  background-color: var(--si-card); color: var(--dsw-alias-label-primary);
+  cursor: pointer; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 16px) 53%, calc(100% - 11px) 53%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  transition: border-color .18s ease;
+}
+.ui-select:focus { border-color: var(--si-accent); }
+.ui-select:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 1px; }
 /* Bottom padding closes the card under the last row, whose own border is
    removed; at 2px the table used to bleed into the card's lower edge. */
 .ui-tablewrap { padding: 0 14px 8px; }
-/* Bounded: a search field stretched across the whole card reads as unfinished. */
-.ui-input {
-  flex: 0 1 380px; min-width: 160px; font: inherit; font-size: var(--si-fs-sm);
-  padding: 6px 11px; border-radius: 8px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
-  transition: border-color .18s ease;
-}
-.ui-input:focus { border-color: var(--si-accent); }
-.ui-input:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 1px; }
-.ui-check {
-  display: inline-flex; align-items: center; gap: 7px; font-size: var(--si-fs-xs);
-  color: var(--dsw-alias-label-secondary); cursor: pointer; user-select: none;
-  padding: 4px 2px; border-radius: 6px; margin-left: auto;
-}
-.ui-check:focus-within { outline: 2px solid var(--si-accent); outline-offset: 2px; }
-.ui-check input { accent-color: var(--si-accent); cursor: pointer; margin: 0; }
 
 /* ---- table ---- */
 /* The page is the vertical scroller, not this card, so the header can stick to
@@ -305,12 +361,12 @@ body:not([data-ds-dark-theme]) .ui-page {
   position: sticky; top: 0; z-index: 2;
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: inset 0 -0.5px 0 var(--dsw-alias-border-l1);
-  text-align: right; font-weight: 500; font-size: var(--si-fs-2xs);
+  text-align: left; font-weight: 500; font-size: var(--si-fs-2xs);
   color: var(--dsw-alias-label-secondary);
   padding: 6px 10px; white-space: nowrap;
 }
 .ui-table td {
-  text-align: right; padding: 7px 10px; vertical-align: middle;
+  text-align: left; padding: 7px 10px; vertical-align: middle;
   border-bottom: 0.5px solid var(--dsw-alias-border-l1);
   font-variant-numeric: tabular-nums;
   transition: background-color .18s ease;
@@ -320,16 +376,14 @@ body:not([data-ds-dark-theme]) .ui-page {
 .ui-table th:first-child, .ui-table td:first-child { text-align: left; padding-left: 0; }
 .ui-table th:last-child, .ui-table td:last-child { padding-right: 0; }
 /* Explicit widths: with table-layout: fixed these are read from the header row
-   only. Left to share the remainder equally, the six numeric columns each get
-   ~94px and the timestamp wraps onto two lines, which doubles every row height.
-   Hiding a column at a narrow width simply redistributes the slack. */
-.ui-table th:nth-child(1) { width: 48%; }
-.ui-table th:nth-child(2) { width: 7%; }
-.ui-table th:nth-child(3) { width: 9%; }
-.ui-table th:nth-child(4) { width: 9%; }
-.ui-table th:nth-child(5) { width: 6%; }
-.ui-table th:nth-child(6) { width: 11%; }
-.ui-table th:nth-child(7) { width: 10%; }
+   only. Four columns, matching the reference: the skill, how much it is used,
+   when it was last used, and where it came from. The model/user split and the
+   session count that used to hold three more columns now ride the call count's
+   tooltip — they answer follow-up questions, not the first one. */
+.ui-table th:nth-child(1) { width: 46%; }
+.ui-table th:nth-child(2) { width: 17%; }
+.ui-table th:nth-child(3) { width: 20%; }
+.ui-table th:nth-child(4) { width: 17%; }
 /* The last-used column no longer forces nowrap. It renders a relative age, which
    is a few characters wide, and if it ever does overflow, wrapping to two lines
    is the correct failure — not painting over the neighbouring cell. */
@@ -361,35 +415,24 @@ body:not([data-ds-dark-theme]) .ui-page {
 .ui-badge-warn { border-color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-border-l2)); color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-label-secondary)); }
 
 .ui-source { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary); }
-.ui-muted { color: var(--dsw-alias-label-tertiary); }
 
-/* Numeric cells other than the call count recede: the count is the column that
-   answers the question the panel exists to answer. */
-.ui-table td.ui-num { color: var(--dsw-alias-label-secondary); }
-.ui-table td.ui-num-zero, .ui-table td.ui-calls.is-zero { color: var(--dsw-alias-label-secondary); }
-
-/* The call count, drawn over a share bar. The bar restates the number, never
-   replaces it, so nothing here depends on colour alone. */
-.ui-calls-wrap { position: relative; display: flex; align-items: center; justify-content: flex-end; width: 100%; max-width: 86px; margin-left: auto; padding: 2px 6px; box-sizing: border-box; }
-/* .26, not .16: the bar is the only thing that carries "which skill matters"
-   between rows whose numbers are 4 and 1. At .16 the rows all read as equal
-   weight and the column stopped doing its job. */
-.ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--si-accent); opacity: .26; }
-.ui-calls-num { position: relative; font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-md); }
-
-/* ---- trend ---- */
-/* 30 fixed-width bars need 120px, which no longer fits now that the columns are
-   bounded, so the bars share whatever the cell gives them instead. */
-.ui-spark { display: flex; align-items: flex-end; gap: 1px; height: 18px; width: 100%; max-width: 100%; }
-.ui-spark i { display: block; flex: 1 1 0; min-width: 0; border-radius: 1px; background: var(--si-accent); }
-.ui-spark i[data-empty="true"] { background: var(--dsw-alias-border-l2); height: 2px; }
-.ui-trend-none { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
+/* The call count with its share bar underneath, the way the reference draws it:
+   the number first, the magnitude second. The bar restates the number and never
+   replaces it, so nothing here depends on reading a length. A zero draws an
+   empty track rather than no bar, so the column keeps its rhythm. */
+.ui-calls-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.ui-calls-num { font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-md); line-height: 1; }
+.ui-calls-track {
+  display: block; width: 68px; max-width: 100%; height: 4px;
+  border-radius: 999px; background: var(--dsw-alias-border-l2); overflow: hidden;
+}
+.ui-calls-bar { display: block; height: 100%; border-radius: 999px; background: var(--si-accent); }
 
 /* ---- states ---- */
 .ui-empty, .ui-error {
   border: 0.5px dashed var(--dsw-alias-border-l2); border-radius: 12px;
   padding: 28px; text-align: center; font-size: var(--si-fs-sm);
-  background: var(--si-card); box-shadow: var(--si-lift);
+  background: var(--si-card);
   color: var(--dsw-alias-label-secondary);
 }
 .ui-error { border-style: solid; border-color: var(--dsw-alias-state-error-primary, var(--dsw-alias-border-l2)); color: var(--dsw-alias-label-primary); }
@@ -421,17 +464,17 @@ body:not([data-ds-dark-theme]) .ui-page {
 }
 
 /* ---- narrow layouts ---- */
+/* Nothing is hidden any more. The table is down to four columns that all answer
+   a question, and at 680px the narrowest of them still gets ~110px, so the old
+   rules that dropped columns by class were removing information to solve a
+   problem that the column cut had already solved. */
 @media (max-width: 900px) {
   .ui-inner { padding: 20px 18px 40px; }
-  .ui-col-source, .ui-col-sessions { display: none; }
   .ui-kpis { flex-wrap: wrap; }
-  .ui-kpi { flex: 1 1 42%; border-left: 0; border-top: 0.5px solid var(--dsw-alias-border-l1); }
-  .ui-kpi:nth-child(-n+2) { border-top: 0; }
-  .ui-kpi:nth-child(odd) { border-left: 0; }
-  .ui-kpi:nth-child(n + 3) { border-top: 0.5px solid var(--dsw-alias-border-l1); }
+  .ui-kpi { flex: 1 1 42%; }
 }
 @media (max-width: 680px) {
-  .ui-col-split, .ui-col-last { display: none; }
+  .ui-kpi { flex: 1 1 100%; }
   .ui-skill-desc { max-width: 30ch; }
 }
 `
@@ -559,44 +602,11 @@ body:not([data-ds-dark-theme]) .ui-page {
       )
     }
 
-    /**
-     * Trailing-30-day activity.
-     *
-     * The chart guidance is explicit that fewer than four data points is a stat,
-     * not a chart — and most skills here fire on one or two days, so drawing 30
-     * mostly-empty stubs is noise rather than information. Bars appear only once
-     * there is a shape to see; below that the active-day count states the same
-     * fact in far less ink. Either way the accessible name carries the value, so
-     * nothing depends on reading the bars.
-     */
-    function Trend({ trend, t }) {
-      const values = (Array.isArray(trend) ? trend : []).map((value) => Number(value) || 0)
-      const activeDays = values.filter((value) => value > 0).length
-      const summary = format(t('trendActive'), { days: activeDays })
-
-      if (values.length === 0) return h('span', { className: 'ui-muted' }, '—')
-
-      if (activeDays < 4) {
-        return h(
-          'span',
-          { className: 'ui-trend-none', title: summary },
-          activeDays === 0 ? '—' : format(t('trendDays'), { days: activeDays }),
-        )
-      }
-
-      const peak = values.reduce((max, value) => Math.max(max, value), 0) || 1
-      return h(
-        'span',
-        { className: 'ui-spark', role: 'img', 'aria-label': summary, title: summary },
-        values.map((value, index) =>
-          h('i', {
-            key: index,
-            'data-empty': value === 0 ? 'true' : 'false',
-            style: { height: `${value === 0 ? 2 : Math.max(3, Math.round((value / peak) * 18))}px` },
-          }),
-        ),
-      )
-    }
+    // The trailing-30-day sparkline used to live here and is gone. It rendered
+    // bars only once four or more days had activity, and on this machine every
+    // used skill has one or two — so it never drew a chart, it just printed a
+    // day count in a column that cost 10% of the table's width. The reference
+    // has no such column and the table is better for it.
 
     function Kpi({ label, value, sub, alert }) {
       return h(
@@ -618,7 +628,13 @@ body:not([data-ds-dark-theme]) .ui-page {
       const [data, setData] = React.useState(null)
       const [error, setError] = React.useState('')
       const [query, setQuery] = React.useState('')
-      const [showUnused, setShowUnused] = React.useState(false)
+      // Three independent narrowings, the way the reference splits them: which
+      // bucket, where it came from, and when it last ran. The bucket replaced a
+      // "show unused" checkbox — a checkbox can only say yes or no, and the
+      // question here is really "which of these three piles am I looking at".
+      const [tab, setTab] = React.useState('all')
+      const [sourceFilter, setSourceFilter] = React.useState('all')
+      const [timeFilter, setTimeFilter] = React.useState('all')
 
       // One same-origin route on DSH's own loopback web server. No port, no
       // CORS, no credential to carry.
@@ -657,17 +673,44 @@ body:not([data-ds-dark-theme]) .ui-page {
         return [...orphans, ...skills]
       }, [data])
 
+      /** One definition of "used", shared by the tabs and the filter, so a tab
+          count can never disagree with the rows it reveals. */
+      const isUsed = (row) => (Number(row.calls) || 0) > 0
+
+      const tabCounts = React.useMemo(
+        () => ({
+          all: allRows.length,
+          used: allRows.filter(isUsed).length,
+          never: allRows.filter((row) => !isUsed(row)).length,
+        }),
+        [allRows],
+      )
+
       const rows = React.useMemo(() => {
         const needle = query.trim().toLowerCase()
+        const now = Date.now()
         return allRows.filter((row) => {
-          if (!showUnused && row.calls === 0) return false
+          if (tab === 'used' && !isUsed(row)) return false
+          if (tab === 'never' && isUsed(row)) return false
+          if (sourceFilter === 'bundled' && row.source !== 'bundled') return false
+          if (sourceFilter === 'local' && row.source === 'bundled') return false
+          if (timeFilter !== 'all') {
+            const lastAt = Number(row.lastAt) || 0
+            // A skill that never ran has no last-used date, so it cannot match a
+            // recency window. That is the honest answer, not a zero.
+            if (lastAt <= 0) return false
+            const days = (now - lastAt) / 86400000
+            if (timeFilter === 'today' && days >= 1) return false
+            if (timeFilter === 'week' && days > 7) return false
+            if (timeFilter === 'month' && days > 30) return false
+          }
           if (!needle) return true
           return (
             String(row.name).toLowerCase().includes(needle) ||
             String(row.description).toLowerCase().includes(needle)
           )
         })
-      }, [allRows, query, showUnused])
+      }, [allRows, query, tab, sourceFilter, timeFilter])
 
       // Share bars are scaled against the whole catalog, not the filtered view,
       // so a filter does not silently restate every bar.
@@ -694,7 +737,7 @@ body:not([data-ds-dark-theme]) .ui-page {
           h(
             'button',
             {
-              className: 'ui-btn',
+              className: 'ui-btn ui-btn-primary',
               type: 'button',
               onClick: load,
               disabled: status === 'loading' || status === 'refreshing',
@@ -742,16 +785,27 @@ body:not([data-ds-dark-theme]) .ui-page {
         )
       }
 
+      // Available = used + never used. The tiles are a partition of one number,
+      // not three unrelated figures, and the one worth acting on carries the
+      // colour the reference gives it.
+      const neverUsed = Math.max(0, (Number(totals.skills) || 0) - (Number(totals.used) || 0))
+
       const kpis = h(
         'div',
         { className: 'ui-kpis' },
         h(Kpi, { key: 'skills', label: t('kpiSkills'), value: formatCount(totals.skills), sub: t('kpiSkillsSub') }),
-        h(Kpi, { key: 'used', label: t('kpiUsed'), value: formatCount(totals.used), sub: t('kpiUsedSub') }),
         h(Kpi, {
-          key: 'calls',
-          label: t('kpiCalls'),
-          value: formatCount(totals.calls),
-          sub: format(t('kpiCallsSub'), { model: formatCount(totals.model), user: formatCount(totals.user) }),
+          key: 'used',
+          label: t('kpiUsed'),
+          value: formatCount(totals.used),
+          sub: format(t('kpiUsedSub'), { calls: formatCount(totals.calls) }),
+        }),
+        h(Kpi, {
+          key: 'never',
+          label: t('kpiNever'),
+          value: formatCount(neverUsed),
+          sub: t('kpiNeverSub'),
+          alert: true,
         }),
         // Rendered only when there is something to report. A zero here is the
         // healthy case, and a permanent quarter-panel reading "0" was the single
@@ -771,9 +825,34 @@ body:not([data-ds-dark-theme]) .ui-page {
       const warning =
         data && data.catalogComplete === false ? h('div', { className: 'ui-warn' }, t('catalogIncomplete')) : null
 
-      const toolbar = h(
+      // Status tabs with counts. aria-pressed rather than role=tab: a real tab
+      // strip owes the reader a tabpanel and arrow-key handling, and this is a
+      // filter group that happens to look like tabs.
+      const tabs = h(
         'div',
-        { className: 'ui-toolbar' },
+        { className: 'ui-tabs' },
+        ...[
+          ['all', 'tabAll'],
+          ['used', 'tabUsed'],
+          ['never', 'tabNever'],
+        ].map(([key, label]) =>
+          h(
+            'button',
+            {
+              key,
+              type: 'button',
+              'aria-pressed': tab === key ? 'true' : 'false',
+              className: tab === key ? 'ui-chip is-active' : 'ui-chip',
+              onClick: () => setTab(key),
+            },
+            format(t(label), { count: formatCount(tabCounts[key]) }),
+          ),
+        ),
+      )
+
+      const filters = h(
+        'div',
+        { className: 'ui-filters' },
         h('input', {
           className: 'ui-input',
           type: 'search',
@@ -783,21 +862,35 @@ body:not([data-ds-dark-theme]) .ui-page {
           onChange: (event) => setQuery(event.target.value),
         }),
         h(
-          'label',
-          { className: 'ui-check' },
-          h('input', {
-            type: 'checkbox',
-            checked: showUnused,
-            onChange: (event) => setShowUnused(event.target.checked),
-          }),
-          t('showUnused'),
+          'select',
+          {
+            className: 'ui-select',
+            value: sourceFilter,
+            'aria-label': t('filterSource'),
+            onChange: (event) => setSourceFilter(event.target.value),
+          },
+          h('option', { value: 'all' }, t('optAll')),
+          h('option', { value: 'local' }, t('optLocal')),
+          h('option', { value: 'builtin' }, t('optBuiltin')),
+        ),
+        h(
+          'select',
+          {
+            className: 'ui-select',
+            value: timeFilter,
+            'aria-label': t('filterTime'),
+            onChange: (event) => setTimeFilter(event.target.value),
+          },
+          h('option', { value: 'all' }, t('optAll')),
+          h('option', { value: 'today' }, t('optToday')),
+          h('option', { value: 'week' }, t('optWeek')),
+          h('option', { value: 'month' }, t('optMonth')),
         ),
       )
 
       const body = h(
         'div',
         { className: 'ui-card' },
-        toolbar,
         h(
           'div',
           { className: 'ui-tablewrap' },
@@ -813,12 +906,9 @@ body:not([data-ds-dark-theme]) .ui-page {
                   'tr',
                   null,
                   h('th', { scope: 'col' }, t('skill')),
-                  h('th', { scope: 'col', className: 'ui-col-source' }, t('source')),
                   h('th', { scope: 'col' }, t('calls')),
-                  h('th', { scope: 'col', className: 'ui-col-split' }, t('split')),
-                  h('th', { scope: 'col', className: 'ui-col-sessions' }, t('sessions')),
-                  h('th', { scope: 'col', className: 'ui-col-last' }, t('lastUsed')),
-                  h('th', { scope: 'col' }, t('trend')),
+                  h('th', { scope: 'col' }, t('lastUsed')),
+                  h('th', { scope: 'col' }, t('source')),
                 ),
               ),
               h(
@@ -827,6 +917,14 @@ body:not([data-ds-dark-theme]) .ui-page {
                 rows.map((row) => {
                   const calls = Number(row.calls) || 0
                   const share = peakCalls > 0 ? Math.round((calls / peakCalls) * 100) : 0
+                  // The model/user split and the session count used to hold three
+                  // columns between them. They answer follow-up questions rather
+                  // than the first one, so they ride the call count's tooltip.
+                  const detail = format(t('callsDetail'), {
+                    model: formatCount(row.model),
+                    user: formatCount(row.user),
+                    sessions: formatCount(row.sessions),
+                  })
                   return h(
                     'tr',
                     { key: row.name },
@@ -857,39 +955,28 @@ body:not([data-ds-dark-theme]) .ui-page {
                         ),
                       ),
                     ),
-                    h('td', { className: 'ui-source ui-col-source' }, sourceLabel(row, t)),
                     h(
                       'td',
-                      { className: calls === 0 ? 'ui-calls is-zero' : 'ui-calls' },
+                      null,
                       h(
                         'span',
-                        { className: 'ui-calls-wrap' },
-                        h('span', { className: 'ui-calls-bar', style: { width: `${share}%` } }),
+                        { className: 'ui-calls-wrap', title: detail },
                         h('span', { className: 'ui-calls-num' }, formatCount(calls)),
+                        h(
+                          'span',
+                          { className: 'ui-calls-track' },
+                          h('i', { className: 'ui-calls-bar', style: { width: `${share}%` } }),
+                        ),
                       ),
                     ),
                     h(
                       'td',
-                      { className: `ui-num ui-col-split${calls === 0 ? ' ui-num-zero' : ''}` },
-                      `${formatCount(row.model)} / ${formatCount(row.user)}`,
-                    ),
-                    h(
-                      'td',
-                      { className: `ui-num ui-col-sessions${calls === 0 ? ' ui-num-zero' : ''}` },
-                      formatCount(row.sessions),
-                    ),
-                    h(
-                      'td',
-                      { className: `ui-num ui-col-last${calls === 0 ? ' ui-num-zero' : ''}` },
+                      null,
                       row.lastAt
-                        ? h(
-                            'span',
-                            { title: formatTime(row.lastAt, locale) },
-                            formatRelative(row.lastAt, t),
-                          )
+                        ? h('span', { title: formatTime(row.lastAt, locale) }, formatRelative(row.lastAt, t))
                         : t('never'),
                     ),
-                    h('td', null, h(Trend, { trend: row.trend, t })),
+                    h('td', { className: 'ui-source' }, sourceLabel(row, t)),
                   )
                 }),
               ),
@@ -933,7 +1020,7 @@ body:not([data-ds-dark-theme]) .ui-page {
         'div',
         { className: 'ui-page' },
         h('style', null, CSS),
-        h('div', { className: 'ui-inner' }, header, warning, kpis, body, footer),
+        h('div', { className: 'ui-inner' }, header, warning, kpis, tabs, filters, body, footer),
       )
     }
 
