@@ -141,7 +141,7 @@ package.json          dsh.bundle.patch + dsh.client{platform:web, immediately:tr
 cordis.patch.yml      insert 一行插件，config 与扫描间隔
 index.js              host：扫描器 + 路由（唯一有逻辑的文件）
 client.js             手写浏览器 bundle：侧栏项 + 主面板
-locale/zh.json        面板显示名（插件管理页用）
+locale/zh.json        `package.json.meta` 的翻译覆盖（**用途未经验证**，见下）
 locale/en.json
 icon.svg              四角星（skill）+ 小伴星，与兄弟插件的柱状图区分
 README.md             配置项与已知限制
@@ -317,3 +317,97 @@ ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
 ```
 
 跑完 lockfile 的 `importers` 里会出现两条 `link:` 记录，之后三个状态一致：package.json、pnpm-lock.yaml、node_modules 的 junction。
+
+## 11. 视觉系统（0.1.2 重做）
+
+旧面板被评为"太 low"。用 `ui-ux-pro-max` 重做，但**不照抄它的输出** —— 先分清哪些能核实、哪些不能。
+
+### 11.1 依据的来源与取舍
+
+`search.py --design-system`（density 8 / variance 3 / motion 2）给出的：
+
+| 项 | 采用 | 理由 |
+|---|---|---|
+| Style: Minimalism & Swiss | ✅ | 网格、高对比、功能性，正对数据面板 |
+| Typography: Fira Code / Fira Sans（mood: dashboard, data, precise） | ✅（取其意） | 结论是**数字列用等宽 + 表格数字**，而不是真去加载 Google Fonts |
+| Avoid: "Ornate design + No filtering" | ✅ | 本来就已有筛选 |
+| **Pattern: "Enterprise Gateway"**（Hero 视频 / Contact Sales / 客户 logo 墙） | ❌ **弃用** | 这是营销落地页套路，与应用内嵌数据面板无关。技能本身要求"没匹配上就说明白"，所以这里明说：这一项没匹配上 |
+| Colors（`#1E40AF` 等原始 hex） | ❌ **弃用** | 插件必须只用 `--dsw-alias-*` 主题 token，不能写死 hex |
+
+另外两条 `--domain` 查询给出了可直接落地的条目：
+
+- **UX · Table Handling**：宽表需要横向滚动或卡片化 → 促成了 11.3 的窄屏列裁剪。
+- **UX · Font Size Scale**：用一致的模块化字号阶，别随手写 → 11.2。
+- **Chart · Trend Over Time**：**"fewer than 4 data points（use stat card）"** 与 **"never distinguish series by hue alone / A11y fallback: visible data table plus concise trend summary"** → 11.4。
+
+### 11.2 真实的 DSH 设计基线（已核实，不是猜的）
+
+与其自创一套，不如对齐宿主。`@deepseek-ai/dsh-client-ui-theme/lib/client.js` 里读到的：
+
+- 正文 `font-size: 14px; line-height: 22px`，次要 `12px / 18px`
+- 边框是 **`0.5px`** 细线，不是 `1px`
+- 圆角：胶囊 20px、步进器 18px、小控件 3px
+- 原生就用 `font-variant-numeric: tabular-nums`
+- hover 用 `--dsw-alias-interactive-bg-hover`
+- `color-mix(in srgb, …)` 可用
+
+同一文件里也拿到了**完整的别名 token 表**（`body{…}` 为明色，`body[data-ds-dark-theme]{…}` 为暗色），
+这正是 11.5 的预览能可信的前提。
+
+因此字号收敛为五级固定阶：`--si-fs-2xs` 11 / `--si-fs-xs` 12 / `--si-fs-sm` 13 / `--si-fs-md` 14 /
+`--si-fs-xl` 28，不再出现 12.5 / 11.5 / 10.5 这类随手值。边框全部换成 `0.5px`。
+
+### 11.3 表格
+
+- **行高节奏（旧面板最难看的地方）**：描述固定单行省略，并且**始终渲染**、用 `min-height: 16px` 预留行高。
+  有描述的行两行、无描述的行一行，这个参差是"廉价感"的主因。现在每行等高。
+- **表头 sticky**：`.ui-page` 才是纵向滚动容器，所以 `th` 能贴住视口顶。代价是**不能**给表格套
+  `overflow-x` 容器 —— 那会成为新的滚动容器并劫持 sticky 轴。窄屏改为按优先级隐藏列
+  （`≤900px` 隐藏「来源」「会话数」，`≤680px` 再隐藏「模型/用户」「最近使用」），这也是上面那条
+  Table Handling 条目的落地方式。
+- **调用次数列**：数字下方垫一条按 `calls / peak` 计算的占比条，条只是复述数字、从不替代数字，因此
+  不违反"不要只靠颜色传达信息"。占比按**整个目录**而非筛选后的视图计算，避免一筛选就把所有条拉满。
+- 其余数字列降一级颜色，把视觉重量留给调用次数；数字全部等宽 + `tabular-nums`。
+
+### 11.4 趋势列
+
+旧版画 30 根柱子，绝大多数是 1px 的空桩 —— 是噪声不是信息。现在：活动天数 **< 4** 时只显示
+`3 天` / `1d`；**≥ 4** 才画柱。两种情况都带 `aria-label`（`近 30 天里有 N 天发生调用`），
+所以不读图形也能拿到信息。
+
+### 11.5 可访问性与验证
+
+清单逐条对照后的落地：焦点环**始终可见**（旧版 `.ui-input:focus { outline: none }` 直接抹掉了它，是实打实的
+缺陷）、`cursor: pointer`、hover 过渡 150–300ms、`prefers-reduced-motion` 下关掉全部过渡、`th` 带
+`scope="col"`、加载/空/错误态带 `role="status"` / `role="alert"`、颜色全部取自语义 token 因而明暗两套
+各自达标。
+
+**怎么看得到**：插件要重启 DSH 才加载新 bundle，而重启会杀掉当前会话 —— 所以改完不能靠"重启看看"。
+`TEMP` 下留了一个一次性预览台（`preview-skill-insights.mjs`，**不进仓库**）：它用最小 React 桩件驱动
+**真实的 `client.js`**，把组件树序列化成 HTML，套上从 bundle 里抽出的真实主题 CSS，再用无头 Chrome 出图。
+明色 / 暗色各一张，均已核对。
+
+```powershell
+node "$env:TEMP\preview-skill-insights.mjs"
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless=new --disable-gpu `
+  --force-device-scale-factor=2 --window-size=1600,1000 --virtual-time-budget=6000 `
+  --screenshot="$env:TEMP\si-light.png" `
+  "file:///$($env:TEMP -replace '\\','/')/si-preview-light.html"
+```
+
+注意 PowerShell 里写 `"si-$theme.html"` 会被当成属性访问、静默拼出错误的 URL，要写 `"si-${theme}.html"`。
+
+### 11.6 仍可改进
+
+- **`locale/*.json` 的用途没验证成功。** 这两个文件（内容形如 `{"meta":{"title","description"}}`，即
+  `package.json.meta` 的翻译覆盖）在本插件里**没有任何代码读它们**：`client.js` 的字典是内联的，由
+  `ctx.locale.register(NS, { zh, en })` 注册。兄弟插件 `dsh-usage-insights` 带同样两个文件，说明它可能是
+  某个约定，但在 `@deepseek-ai/*` 全树检索 `locale.{0,30}\.json` / `join(…,'locale',…)` 只命中
+  `locale/change` 事件、源码注释里的路径和 PDF.js 噪声，**没有找到读取插件目录 locale 的代码**；官方
+  `dsh` 清单 schema 也只读 `bundle` / `profile` / `client` / `configTrees` / `sessionFormatMigration` /
+  `moduleFallback`，没有 `locale` 字段。Electron 主进程 bundle 不在可检索路径上，无法穷尽排除。
+  因此：**保留**（382 字节，且有旁证），但不再声称它"插件管理页用"。要么找到读者，要么在下个版本删掉。
+- KPI 条的竖分隔线在超窄屏（`≤900px`）折成两行时靠 `:nth-child` 补上边框，属于可用但不够优雅的写法。
+- 暗色下占比条 `opacity: .16` 偏弱；数字本身可读，故未上调。
+- 趋势列仍是自绘 SVG 级的 DOM（30 个 `<i>`），未虚拟化；对当前行数无影响。
+

@@ -10,6 +10,13 @@
  * control and every style is local, and only `--dsw-alias-*` theme tokens are
  * used for colour.
  *
+ * Visual system notes (see DESIGN.md §11):
+ *   - Type scale is a fixed five-step ramp, never ad-hoc sizes.
+ *   - Borders are 0.5px hairlines, matching the host shell's own language.
+ *   - Every number is tabular and monospaced so columns align and compare.
+ *   - Colour never carries a meaning on its own; the value always says it too.
+ *   - Focus is always visible, and motion always yields to reduced-motion.
+ *
  * Data comes from a same-origin route on DSH's own loopback web server
  * (`/skill-insights/summary`), served by the Host half. The Host already merges
  * the catalog with the counts, so this file only filters, sorts and draws.
@@ -25,7 +32,7 @@ window.__ModuleLoader__.load({
     /** Locale namespace owned by this plugin. */
     const NS = 'skill-insights'
     /** Bumped only to be visible in the served bundle. */
-    const BUILD = 'skill-insights-1'
+    const BUILD = 'skill-insights-2'
     /** Same-origin route registered by the Host half. */
     const ROUTE = '/skill-insights/summary'
 
@@ -50,6 +57,8 @@ window.__ModuleLoader__.load({
       lastUsed: '最近使用',
       trend: '近 30 天',
       never: '未使用',
+      trendDays: '{days} 天',
+      trendActive: '近 30 天里有 {days} 天发生调用',
       kpiSkills: '可用技能',
       kpiUsed: '用过的技能',
       kpiCalls: '总调用次数',
@@ -66,6 +75,7 @@ window.__ModuleLoader__.load({
       trackedDetail: '扫描了 {sessions} 个会话 · 最后扫描 {at}',
       trackedFailed: ' · {failed} 个会话读取失败',
       trackedMalformed: ' · {malformed} 条事件无法解析',
+      basis: '统计口径',
       footnote:
         '调用次数来自本机 DSH 会话日志：模型通过 skill 工具加载的每一次，加上你用 /技能名 显式注入的每一次。只统计调用次数，不统计成功与否。删掉的会话会连同它的历史调用一起消失。',
     }
@@ -91,6 +101,8 @@ window.__ModuleLoader__.load({
       lastUsed: 'Last used',
       trend: 'Last 30 days',
       never: 'Never',
+      trendDays: '{days}d',
+      trendActive: 'Used on {days} days in the last 30',
       kpiSkills: 'Available skills',
       kpiUsed: 'Skills used',
       kpiCalls: 'Total calls',
@@ -107,53 +119,192 @@ window.__ModuleLoader__.load({
       trackedDetail: '{sessions} sessions scanned · last scan {at}',
       trackedFailed: ' · {failed} sessions unreadable',
       trackedMalformed: ' · {malformed} unparseable events',
+      basis: 'How these numbers are derived',
       footnote:
         'Counts come from this machine\'s DSH session logs: every model load through the skill tool, plus every explicit /skill-name injection. Attempts are counted, not successes. Deleting a session also deletes its recorded usage.',
     }
 
+    // Five-step ramp, shared by every rule below. Values are deliberately close
+    // together: a dashboard reads better when few sizes compete.
     const CSS = `
-.ui-page { height: 100%; overflow: auto; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
-.ui-inner { max-width: 1120px; margin: 0 auto; padding: 28px 32px 56px; box-sizing: border-box; }
+.ui-page {
+  --si-fs-2xs: 11px;
+  --si-fs-xs: 12px;
+  --si-fs-sm: 13px;
+  --si-fs-md: 14px;
+  --si-fs-xl: 28px;
+  --si-num: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  height: 100%; overflow: auto;
+  background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
+}
+.ui-inner { max-width: 1200px; margin: 0 auto; padding: 26px 32px 52px; box-sizing: border-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-page * { transition: none !important; }
+}
+
+/* ---- header ---- */
 .ui-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
-.ui-title { font-size: 24px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
-.ui-subtitle { font-size: 13px; color: var(--dsw-alias-label-secondary); margin: 0; }
+.ui-title { font-size: 19px; line-height: 26px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.005em; }
+.ui-subtitle { font-size: var(--si-fs-xs); line-height: 18px; color: var(--dsw-alias-label-tertiary); margin: 0; }
 .ui-actions { display: flex; align-items: center; gap: 10px; }
-.ui-btn { appearance: none; font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); cursor: pointer; }
-.ui-btn:hover:not(:disabled) { border-color: var(--dsw-alias-brand-primary); }
-.ui-btn:disabled { opacity: .55; cursor: default; }
-.ui-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.ui-kpi { border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; padding: 14px 16px; background: var(--dsw-alias-bg-layer-1); }
-.ui-kpi-label { font-size: 12px; color: var(--dsw-alias-label-secondary); margin-bottom: 6px; }
-.ui-kpi-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.ui-kpi-sub { font-size: 11.5px; color: var(--dsw-alias-label-secondary); margin-top: 4px; line-height: 1.45; }
-.ui-card { border: 1px solid var(--dsw-alias-border-l1); border-radius: 14px; background: var(--dsw-alias-bg-layer-1); padding: 16px 20px 18px; margin-bottom: 18px; }
-.ui-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-.ui-input { flex: 1 1 240px; min-width: 180px; font: inherit; font-size: 13px; padding: 7px 11px; border-radius: 8px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
-.ui-input:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
-.ui-check { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--dsw-alias-label-secondary); cursor: pointer; user-select: none; }
-.ui-check input { accent-color: var(--dsw-alias-brand-primary); }
-.ui-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.ui-table th { text-align: right; font-weight: 500; font-size: 12px; color: var(--dsw-alias-label-secondary); padding: 0 10px 10px; border-bottom: 1px solid var(--dsw-alias-border-l1); white-space: nowrap; }
-.ui-table th:first-child, .ui-table td:first-child { text-align: left; padding-left: 0; }
-.ui-table th:last-child, .ui-table td:last-child { padding-right: 0; }
-.ui-table td { text-align: right; padding: 10px; border-bottom: 1px solid var(--dsw-alias-border-l1); font-variant-numeric: tabular-nums; vertical-align: middle; }
+
+.ui-btn {
+  appearance: none; font: inherit; font-size: var(--si-fs-xs); line-height: 18px;
+  padding: 5px 13px; border-radius: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary);
+  cursor: pointer; transition: background-color .18s ease, border-color .18s ease;
+}
+.ui-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); border-color: var(--dsw-alias-border-l4); }
+.ui-btn:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.ui-btn:disabled { opacity: .5; cursor: default; }
+
+/* ---- kpi strip ---- */
+/* One ruled strip rather than four floating cards: it keeps the grid edge
+   aligned with the table below, and the hairlines give the numbers a rhythm
+   that separate boxes did not. */
+.ui-kpis {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-1); margin-bottom: 16px; overflow: hidden;
+}
+.ui-kpi { padding: 14px 18px 15px; border-left: 0.5px solid var(--dsw-alias-border-l1); }
+.ui-kpi:first-child { border-left: 0; }
+.ui-kpi-label { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); margin-bottom: 8px; }
+.ui-kpi-value {
+  font-size: var(--si-fs-xl); line-height: 1; font-weight: 600;
+  font-family: var(--si-num); font-variant-numeric: tabular-nums;
+}
+.ui-kpi-sub { font-size: var(--si-fs-2xs); line-height: 16px; color: var(--dsw-alias-label-tertiary); margin-top: 8px; }
+
+/* ---- card + toolbar ---- */
+.ui-card {
+  border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-1); padding: 14px 18px 4px; margin-bottom: 16px;
+}
+.ui-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+/* Bounded: a search field stretched across the whole card reads as unfinished. */
+.ui-input {
+  flex: 0 1 380px; min-width: 160px; font: inherit; font-size: var(--si-fs-sm);
+  padding: 6px 11px; border-radius: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
+  transition: border-color .18s ease;
+}
+.ui-input:focus { border-color: var(--dsw-alias-brand-primary); }
+.ui-input:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
+.ui-check {
+  display: inline-flex; align-items: center; gap: 7px; font-size: var(--si-fs-xs);
+  color: var(--dsw-alias-label-secondary); cursor: pointer; user-select: none;
+  padding: 4px 2px; border-radius: 6px; margin-left: auto;
+}
+.ui-check:focus-within { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.ui-check input { accent-color: var(--dsw-alias-brand-primary); cursor: pointer; margin: 0; }
+
+/* ---- table ---- */
+/* The page is the vertical scroller, not this card, so the header can stick to
+   the top of the viewport. That is also why the table has no horizontal scroll
+   wrapper: an overflow container would capture the sticky axis and kill it.
+   Narrow layouts drop low-priority columns instead. */
+.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--si-fs-sm); }
+.ui-table th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: inset 0 -0.5px 0 var(--dsw-alias-border-l1);
+  text-align: right; font-weight: 500; font-size: var(--si-fs-2xs);
+  color: var(--dsw-alias-label-tertiary);
+  padding: 8px 10px; white-space: nowrap;
+}
+.ui-table td {
+  text-align: right; padding: 9px 10px; vertical-align: middle;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  font-variant-numeric: tabular-nums;
+  transition: background-color .18s ease;
+}
+.ui-table tbody tr:hover td { background: var(--dsw-alias-interactive-bg-hover); }
 .ui-table tbody tr:last-child td { border-bottom: 0; }
-.ui-skill { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.ui-skill-name { font-weight: 500; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12.5px; }
-.ui-skill-desc { font-size: 11.5px; color: var(--dsw-alias-label-secondary); line-height: 1.5; max-width: 620px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.ui-badge { font-size: 10.5px; font-weight: 500; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); font-family: inherit; white-space: nowrap; }
-.ui-badge-warn { border-color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-border-l2)); }
-.ui-source { font-size: 12px; color: var(--dsw-alias-label-secondary); }
-.ui-zero { color: var(--dsw-alias-label-secondary); opacity: .65; }
-.ui-spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 16px; }
-.ui-spark i { display: block; width: 3px; border-radius: 1px; background: var(--dsw-alias-brand-primary); min-height: 1px; }
-.ui-spark i[data-empty="true"] { background: var(--dsw-alias-border-l2); }
-.ui-empty, .ui-error { border: 1px dashed var(--dsw-alias-border-l2); border-radius: 12px; padding: 28px; text-align: center; color: var(--dsw-alias-label-secondary); font-size: 13px; }
-.ui-error { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-label-primary); }
-.ui-error code { font-size: 12px; color: var(--dsw-alias-label-secondary); }
-.ui-warn { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--dsw-alias-label-secondary); border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; }
-.ui-footer { margin-top: 6px; font-size: 12px; color: var(--dsw-alias-label-secondary); line-height: 1.7; }
-.ui-footer code { font-size: 11.5px; }
+.ui-table th:first-child, .ui-table td:first-child { text-align: left; padding-left: 0; width: 50%; }
+.ui-table th:last-child, .ui-table td:last-child { padding-right: 0; }
+
+.ui-skill { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ui-skill-name {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--si-num); font-size: var(--si-fs-xs); font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+/* Fills its cell rather than stopping short and leaving a void before the
+   numeric columns. */
+.ui-skill-desc {
+  font-size: var(--si-fs-2xs); line-height: 16px; min-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.ui-badge {
+  font-family: inherit; font-size: var(--si-fs-2xs); line-height: 15px; font-weight: 500;
+  padding: 0 6px; border-radius: 999px; white-space: nowrap;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+}
+.ui-badge-warn { border-color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-border-l2)); color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary)); }
+
+.ui-source { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); }
+.ui-muted { color: var(--dsw-alias-label-tertiary); }
+
+/* Numeric cells other than the call count recede: the count is the column that
+   answers the question the panel exists to answer. */
+.ui-table td.ui-num { color: var(--dsw-alias-label-secondary); }
+.ui-table td.ui-num-zero, .ui-table td.ui-calls.is-zero { color: var(--dsw-alias-label-tertiary); }
+
+/* The call count, drawn over a share bar. The bar restates the number, never
+   replaces it, so nothing here depends on colour alone. */
+.ui-calls-wrap { position: relative; display: inline-flex; align-items: center; justify-content: flex-end; width: 78px; padding: 2px 6px; box-sizing: border-box; }
+.ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--dsw-alias-brand-primary); opacity: .16; }
+.ui-calls-num { position: relative; font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-sm); }
+
+/* ---- trend ---- */
+.ui-spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 18px; }
+.ui-spark i { display: block; width: 3px; border-radius: 1px; background: var(--dsw-alias-brand-primary); }
+.ui-spark i[data-empty="true"] { background: var(--dsw-alias-border-l2); height: 2px; }
+.ui-trend-none { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+
+/* ---- states ---- */
+.ui-empty, .ui-error {
+  border: 0.5px dashed var(--dsw-alias-border-l2); border-radius: 12px;
+  padding: 28px; text-align: center; font-size: var(--si-fs-sm);
+  color: var(--dsw-alias-label-tertiary);
+}
+.ui-error { border-style: solid; border-color: var(--dsw-alias-state-error-primary, var(--dsw-alias-border-l2)); color: var(--dsw-alias-label-primary); }
+.ui-error code { font-family: var(--si-num); font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); }
+.ui-actions-row { margin-top: 14px; }
+.ui-warn {
+  display: flex; gap: 8px; align-items: flex-start; font-size: var(--si-fs-xs); line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  border: 0.5px solid var(--dsw-alias-state-warning-primary, var(--dsw-alias-border-l1));
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 14px;
+}
+
+/* ---- footer ---- */
+.ui-footer { font-size: var(--si-fs-2xs); line-height: 17px; color: var(--dsw-alias-label-tertiary); }
+.ui-footer code { font-family: var(--si-num); }
+.ui-basis { margin-top: 8px; }
+.ui-basis summary { cursor: pointer; border-radius: 6px; width: fit-content; padding: 1px 0; }
+.ui-basis summary:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.ui-basis-text { margin: 6px 0 0; max-width: 76ch; }
+
+/* ---- narrow layouts ---- */
+@media (max-width: 900px) {
+  .ui-inner { padding: 20px 18px 40px; }
+  .ui-col-source, .ui-col-sessions { display: none; }
+  .ui-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ui-kpi:nth-child(odd) { border-left: 0; }
+  .ui-kpi:nth-child(n + 3) { border-top: 0.5px solid var(--dsw-alias-border-l1); }
+}
+@media (max-width: 680px) {
+  .ui-col-split, .ui-col-last { display: none; }
+  .ui-skill-desc { max-width: 30ch; }
+}
 `
 
     function formatCount(value) {
@@ -227,19 +378,42 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** Trailing-30-day mini bar chart; empty days stay as faint 1px stubs. */
-    function Spark({ trend }) {
-      const values = Array.isArray(trend) ? trend : []
-      if (values.length === 0) return null
-      const peak = values.reduce((max, value) => Math.max(max, Number(value) || 0), 0)
+    /**
+     * Trailing-30-day activity.
+     *
+     * The chart guidance is explicit that fewer than four data points is a stat,
+     * not a chart — and most skills here fire on one or two days, so drawing 30
+     * mostly-empty stubs is noise rather than information. Bars appear only once
+     * there is a shape to see; below that the active-day count states the same
+     * fact in far less ink. Either way the accessible name carries the value, so
+     * nothing depends on reading the bars.
+     */
+    function Trend({ trend, t }) {
+      const values = (Array.isArray(trend) ? trend : []).map((value) => Number(value) || 0)
+      const activeDays = values.filter((value) => value > 0).length
+      const summary = format(t('trendActive'), { days: activeDays })
+
+      if (values.length === 0) return h('span', { className: 'ui-muted' }, '—')
+
+      if (activeDays < 4) {
+        return h(
+          'span',
+          { className: 'ui-trend-none', title: summary },
+          activeDays === 0 ? '—' : format(t('trendDays'), { days: activeDays }),
+        )
+      }
+
+      const peak = values.reduce((max, value) => Math.max(max, value), 0) || 1
       return h(
         'span',
-        { className: 'ui-spark', title: values.join(' · ') },
-        values.map((value, index) => {
-          const n = Number(value) || 0
-          const height = peak === 0 ? 1 : Math.max(1, Math.round((n / peak) * 16))
-          return h('i', { key: index, 'data-empty': n === 0 ? 'true' : 'false', style: { height: `${height}px` } })
-        }),
+        { className: 'ui-spark', role: 'img', 'aria-label': summary, title: summary },
+        values.map((value, index) =>
+          h('i', {
+            key: index,
+            'data-empty': value === 0 ? 'true' : 'false',
+            style: { height: `${value === 0 ? 2 : Math.max(3, Math.round((value / peak) * 18))}px` },
+          }),
+        ),
       )
     }
 
@@ -314,6 +488,13 @@ window.__ModuleLoader__.load({
         })
       }, [allRows, query, showUnused])
 
+      // Share bars are scaled against the whole catalog, not the filtered view,
+      // so a filter does not silently restate every bar.
+      const peakCalls = React.useMemo(
+        () => allRows.reduce((max, row) => Math.max(max, Number(row.calls) || 0), 0),
+        [allRows],
+      )
+
       const totals = (data && data.totals) || {}
       const tracked = (data && data.tracked) || {}
 
@@ -353,12 +534,12 @@ window.__ModuleLoader__.load({
             header,
             h(
               'div',
-              { className: 'ui-error' },
+              { className: 'ui-error', role: 'alert' },
               h('div', null, t('errorTitle')),
-              h('div', { style: { marginTop: 8 } }, h('code', null, error)),
+              h('div', { className: 'ui-actions-row' }, h('code', null, error)),
               h(
                 'div',
-                { style: { marginTop: 14 } },
+                { className: 'ui-actions-row' },
                 h('button', { className: 'ui-btn', type: 'button', onClick: load }, t('retry')),
               ),
             ),
@@ -371,7 +552,12 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'ui-page' },
           h('style', null, CSS),
-          h('div', { className: 'ui-inner' }, header, h('div', { className: 'ui-empty' }, t('loading'))),
+          h(
+            'div',
+            { className: 'ui-inner' },
+            header,
+            h('div', { className: 'ui-empty', role: 'status' }, t('loading')),
+          ),
         )
       }
 
@@ -386,14 +572,14 @@ window.__ModuleLoader__.load({
           value: formatCount(totals.calls),
           sub: format(t('kpiCallsSub'), { model: formatCount(totals.model), user: formatCount(totals.user) }),
         }),
-        totals.orphans > 0
-          ? h(Kpi, {
-              key: 'orphans',
-              label: t('kpiOrphans'),
-              value: formatCount(totals.orphans),
-              sub: format(t('kpiOrphansSub'), { calls: formatCount(totals.orphanCalls) }),
-            })
-          : null,
+        // Rendered even at zero: a card that vanishes reflows the strip, and the
+        // grid is meant to be a stable frame you learn once.
+        h(Kpi, {
+          key: 'orphans',
+          label: t('kpiOrphans'),
+          value: formatCount(totals.orphans),
+          sub: format(t('kpiOrphansSub'), { calls: formatCount(totals.orphanCalls) }),
+        }),
       )
 
       const warning =
@@ -407,6 +593,7 @@ window.__ModuleLoader__.load({
           type: 'search',
           value: query,
           placeholder: t('search'),
+          'aria-label': t('search'),
           onChange: (event) => setQuery(event.target.value),
         }),
         h(
@@ -426,7 +613,7 @@ window.__ModuleLoader__.load({
         { className: 'ui-card' },
         toolbar,
         rows.length === 0
-          ? h('div', { className: 'ui-empty' }, t('empty'))
+          ? h('div', { className: 'ui-empty', role: 'status' }, t('empty'))
           : h(
               'table',
               { className: 'ui-table' },
@@ -436,20 +623,22 @@ window.__ModuleLoader__.load({
                 h(
                   'tr',
                   null,
-                  h('th', null, t('skill')),
-                  h('th', null, t('source')),
-                  h('th', null, t('calls')),
-                  h('th', null, t('split')),
-                  h('th', null, t('sessions')),
-                  h('th', null, t('lastUsed')),
-                  h('th', null, t('trend')),
+                  h('th', { scope: 'col' }, t('skill')),
+                  h('th', { scope: 'col', className: 'ui-col-source' }, t('source')),
+                  h('th', { scope: 'col' }, t('calls')),
+                  h('th', { scope: 'col', className: 'ui-col-split' }, t('split')),
+                  h('th', { scope: 'col', className: 'ui-col-sessions' }, t('sessions')),
+                  h('th', { scope: 'col', className: 'ui-col-last' }, t('lastUsed')),
+                  h('th', { scope: 'col' }, t('trend')),
                 ),
               ),
               h(
                 'tbody',
                 null,
-                rows.map((row) =>
-                  h(
+                rows.map((row) => {
+                  const calls = Number(row.calls) || 0
+                  const share = peakCalls > 0 ? Math.round((calls / peakCalls) * 100) : 0
+                  return h(
                     'tr',
                     { key: row.name },
                     h(
@@ -470,25 +659,38 @@ window.__ModuleLoader__.load({
                             ? h('span', { className: 'ui-badge' }, t('modelOnly'))
                             : null,
                         ),
-                        row.description ? h('div', { className: 'ui-skill-desc' }, row.description) : null,
+                        h('div', { className: 'ui-skill-desc' }, row.description || ''),
                       ),
                     ),
-                    h('td', { className: 'ui-source' }, row.source || '—'),
-                    h('td', { className: row.calls === 0 ? 'ui-zero' : undefined }, formatCount(row.calls)),
+                    h('td', { className: 'ui-source ui-col-source' }, row.source || '—'),
                     h(
                       'td',
-                      { className: row.calls === 0 ? 'ui-zero' : undefined },
+                      { className: calls === 0 ? 'ui-calls is-zero' : 'ui-calls' },
+                      h(
+                        'span',
+                        { className: 'ui-calls-wrap' },
+                        h('span', { className: 'ui-calls-bar', style: { width: `${share}%` } }),
+                        h('span', { className: 'ui-calls-num' }, formatCount(calls)),
+                      ),
+                    ),
+                    h(
+                      'td',
+                      { className: `ui-num ui-col-split${calls === 0 ? ' ui-num-zero' : ''}` },
                       `${formatCount(row.model)} / ${formatCount(row.user)}`,
                     ),
-                    h('td', { className: row.calls === 0 ? 'ui-zero' : undefined }, formatCount(row.sessions)),
                     h(
                       'td',
-                      { className: row.calls === 0 ? 'ui-zero' : undefined },
+                      { className: `ui-num ui-col-sessions${calls === 0 ? ' ui-num-zero' : ''}` },
+                      formatCount(row.sessions),
+                    ),
+                    h(
+                      'td',
+                      { className: `ui-num ui-col-last${calls === 0 ? ' ui-num-zero' : ''}` },
                       row.lastAt ? formatTime(row.lastAt, locale) : t('never'),
                     ),
-                    h('td', null, h(Spark, { trend: row.trend })),
-                  ),
-                ),
+                    h('td', null, h(Trend, { trend: row.trend, t })),
+                  )
+                }),
               ),
             ),
       )
@@ -496,18 +698,26 @@ window.__ModuleLoader__.load({
       const footer = h(
         'div',
         { className: 'ui-footer' },
-        h('div', null, format(t('tracked'), { home: tracked.home || '—' })),
         h(
           'div',
           null,
-          format(t('trackedDetail'), {
-            sessions: formatCount(totals.sessions),
-            at: tracked.scannedAt ? formatTime(tracked.scannedAt, locale) : '—',
-          }) +
+          format(t('tracked'), { home: tracked.home || '—' }) +
+            ' · ' +
+            format(t('trackedDetail'), {
+              sessions: formatCount(totals.sessions),
+              at: tracked.scannedAt ? formatTime(tracked.scannedAt, locale) : '—',
+            }) +
             (totals.failed > 0 ? format(t('trackedFailed'), { failed: formatCount(totals.failed) }) : '') +
             (tracked.malformed > 0 ? format(t('trackedMalformed'), { malformed: formatCount(tracked.malformed) }) : ''),
         ),
-        h('div', { style: { marginTop: 6 } }, t('footnote')),
+        // The long explanation is a disclosure, not a wall of grey under the
+        // table: the provenance line above is what most readers want.
+        h(
+          'details',
+          { className: 'ui-basis' },
+          h('summary', null, t('basis')),
+          h('p', { className: 'ui-basis-text' }, t('footnote')),
+        ),
       )
 
       return h(
