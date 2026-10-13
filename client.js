@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
     /** Locale namespace owned by this plugin. */
     const NS = 'skill-insights'
     /** Bumped only to be visible in the served bundle. */
-    const BUILD = 'skill-insights-2'
+    const BUILD = 'skill-insights-3'
     /** Same-origin route registered by the Host half. */
     const ROUTE = '/skill-insights/summary'
 
@@ -53,6 +53,7 @@ window.__ModuleLoader__.load({
       source: '来源',
       srcBuiltin: '内置',
       srcLocal: '本机',
+      buildTag: '构建 {build}',
       today: '今天',
       yesterday: '昨天',
       daysAgo: '{days} 天前',
@@ -102,6 +103,7 @@ window.__ModuleLoader__.load({
       source: 'Source',
       srcBuiltin: 'Bundled',
       srcLocal: 'Local',
+      buildTag: 'build {build}',
       today: 'Today',
       yesterday: 'Yesterday',
       daysAgo: '{days}d ago',
@@ -412,6 +414,11 @@ body:not([data-ds-dark-theme]) .ui-page {
 .ui-basis summary { cursor: pointer; border-radius: 6px; width: fit-content; padding: 1px 0; text-underline-offset: 2px; }
 .ui-basis summary:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 2px; }
 .ui-basis-text { margin: 6px 0 0; max-width: 76ch; }
+/* Small, monospace, and honest about being machinery rather than content. */
+.ui-build {
+  margin-top: 10px; font-family: var(--si-num); font-variant-numeric: tabular-nums;
+  font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary);
+}
 
 /* ---- narrow layouts ---- */
 @media (max-width: 900px) {
@@ -913,6 +920,13 @@ body:not([data-ds-dark-theme]) .ui-page {
           h('summary', null, t('basis')),
           h('p', { className: 'ui-basis-text' }, t('footnote')),
         ),
+        // Rendered, not just exported. A panel whose code changes on disk but
+        // whose window keeps showing an earlier bundle is undiagnosable from the
+        // inside — the reader cannot tell a styling change from a stale load.
+        // The build id closes that: if this string does not match the last
+        // commit, the app is serving an older bundle and no amount of re-reading
+        // the stylesheet will change what is on screen.
+        h('div', { className: 'ui-build' }, format(t('buildTag'), { build: BUILD })),
       )
 
       return h(
