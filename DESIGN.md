@@ -277,10 +277,26 @@ ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
 
 | 检查 | 结果 |
 |---|---|
-| `node index.js` / `node check-client.mjs` | 通过 |
-| `npm pack --dry-run` | 11 个文件，`check-client.mjs` / `DESIGN.md` 正确排除，`LICENSE` 自动带上 |
+| `node index.js` | 通过（计数逻辑） |
+| `node check-host.mjs` | 通过（假 Cordis 上下文 + 临时 `DSH_HOME`，跑通扫描 → 快照 → 路由 → 缓存全链路） |
+| `node check-client.mjs` | 通过（模块契约、slot 注册、字典 key 一致、四条渲染路径） |
+| `npm pack --dry-run` | 11 个文件，`check-*.mjs` / `DESIGN.md` 正确排除，`LICENSE` 自动带上 |
 | 打包 → 装进干净目录 → 从**装好的副本**运行 | 三个检查全部通过 |
 | 清单里每个 `dsh.bundle.patch` / `icon` / `exports` 目标 | 在装好的副本里都存在 |
 | 从 profile 目录 `import('dsh-skill-insights')` | 解析成功，导出 `name` / `apply` / `countSkills` |
 
-最后一条最要紧：它证明了 **`files` 是完整的** —— 这正是只有第一个安装的人才会撞上的那类 bug。
+倒数第二条最要紧：它证明了 **`files` 是完整的** —— 这正是只有第一个安装的人才会撞上的那类 bug。
+
+### 本机安装与 lockfile
+
+桌面 profile **只能由 Electron 应用自己管**：`dsh plugin --profile desktop add` 会被拒绝，报 `profile "desktop" is managed exclusively by the Electron application`。所以本机安装只能走应用内的插件管理器，或像本次这样手工接线。
+
+手工改 `package.json` 会留下一个隐患：`pnpm-lock.yaml` 里没有新增的 `link:` 记录，package.json 与 lockfile 不同步，而启动时若跑 `--frozen-lockfile` 就会 `ERR_PNPM_OUTDATED_LOCKFILE`。修法是用应用自带的 pnpm 对齐（`runtime.json` 记的 11.7.0，也是插件管理器日志里那一版）：
+
+```powershell
+# 先备份 profile 的 package.json 与 pnpm-lock.yaml
+& "<runtime>\dependencies\node\bin\node.exe" `
+  "<runtime>\dependencies\pnpm\bin\pnpm.cjs" install --prefer-offline
+```
+
+跑完 lockfile 的 `importers` 里会出现两条 `link:` 记录，之后三个状态一致：package.json、pnpm-lock.yaml、node_modules 的 junction。

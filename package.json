@@ -50,7 +50,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "node index.js && node check-client.mjs"
+    "test": "node index.js && node check-client.mjs && node check-host.mjs"
   },
   "dsh": {
     "bundle": {

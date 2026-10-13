@@ -70,6 +70,7 @@ npm test
 ```
 
 - `node index.js` — self-check for the pure `countSkills` function. Builds a synthetic event stream (two model invocations, one user invocation, one uninstalled skill, several noise events) and asserts counts, first/last use, day bucketing and the malformed-event counter; then feeds an empty array and a bare `{ type }` event to confirm it degrades instead of throwing.
+- `node check-host.mjs` — host integration check. A fake Cordis context and a throwaway `DSH_HOME` exercise the whole path a restart takes: folding two sessions into one table, the cwd union that drives catalog discovery, an unreadable session being counted instead of fatal, the snapshot the route serialises, the `405` guard, and the durable cache.
 - `node check-client.mjs` — load/render check for `client.js`. A minimal React stand-in keeps it dependency-free; it asserts the module-loader contract, both slot registrations, that the zh and en dictionaries expose identical keys, that all render paths build a tree, and that the output contains no `MISSING:` (i.e. every copy key the panel uses exists).
 
 `client.js` is a hand-written browser bundle: `window.__ModuleLoader__.load` plus `react` from the frozen module table. No build step, no client package dependency.

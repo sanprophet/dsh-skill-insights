@@ -70,6 +70,7 @@ npm test
 ```
 
 - `node index.js` —— `countSkills` 纯函数自检。构造一段合成事件流（模型两次、用户一次、一个已卸载的 skill、若干噪声事件），断言计数、首次/末次使用、按天分桶与畸形事件计数；再喂空数组和只有 `type` 的事件，确认降级而不是抛错。
+- `node check-host.mjs` —— host 集成检查。用假 Cordis 上下文 + 临时 `DSH_HOME`，把重启后会走的那条路整条跑一遍：两个会话折叠成一张表、驱动目录发现的 cwd 并集、读不出的会话被计数而不是致命、路由序列化的快照、`405` 守卫、以及持久化缓存。
 - `node check-client.mjs` —— `client.js` 的加载与渲染检查。用一个极简 React 替身保持零依赖；断言模块契约、两个 slot 注册、中英文字典 key 完全一致、所有渲染路径都能建树，以及渲染结果里**没有 `MISSING:`**（即面板用到的每个文案 key 都存在）。
 
 `client.js` 是手写的浏览器 bundle：`window.__ModuleLoader__.load` + 从冻结模块表取 `react`。没有构建步骤，不依赖任何 client 包。
