@@ -85,12 +85,15 @@ const zhKeys = Object.keys(dictionaries.zh).sort()
 const enKeys = Object.keys(dictionaries.en).sort()
 assert.deepEqual(zhKeys, enKeys, 'zh and en expose the same keys')
 
-/** Flatten a fake element tree into a searchable string. */
+/** Flatten a fake element tree into a searchable string. `title` is included so
+ * the native-tooltip escape hatches (truncated descriptions, absolute timestamps)
+ * stay assertable from a DOM-free render. */
 function flatten(node) {
   if (node === null || node === undefined || node === false || node === true) return ''
   if (typeof node === 'string' || typeof node === 'number') return String(node)
   if (Array.isArray(node)) return node.map(flatten).join(' ')
-  return `${String(node.type)} ${flatten(node.children)}`
+  const attrs = node.props && typeof node.props === 'object' ? ` ${node.props.title || ''}` : ''
+  return `${String(node.type)} ${flatten(node.children)}${attrs}`
 }
 
 function render(seedValues) {
@@ -165,7 +168,8 @@ assert.match(ready, /ponytail/, 'used skill rendered')
 assert.match(ready, /ghost-skill/, 'orphan rendered')
 assert.match(ready, /已卸载/, 'orphan badge rendered')
 assert.match(ready, /调用次数/, 'table headers rendered')
-assert.match(ready, /10月13日/, 'last-used timestamp formatted')
+assert.match(ready, /今天|昨天|天前/, 'last-used renders a relative age')
+assert.match(ready, /10月13日/, 'absolute timestamp kept as the tooltip')
 assert.doesNotMatch(ready, /never-used/, 'unused skill hidden by default')
 assert.doesNotMatch(ready, /MISSING:/, 'no locale key is missing')
 
@@ -179,6 +183,16 @@ const styleCss = ready.slice(0, ready.indexOf('</style>'))
 assert.ok(styleCss.includes('table-layout: fixed'), 'table uses fixed layout')
 assert.match(styleCss, /\.ui-skill-desc\s*\{[^}]*overflow: hidden/, 'description clips its overflow')
 assert.match(styleCss, /\.ui-skill-desc\s*\{[^}]*text-overflow: ellipsis/, 'description ellipsises')
+// The last-used cell renders a relative age and deliberately does not clamp with
+// nowrap: when a percentage column runs out of room, wrapping is the correct
+// failure and overlapping the next column is not.
+assert.ok(!/\.ui-table td\.ui-col-last\s*\{[^}]*white-space:\s*nowrap/.test(styleCss), 'last-used does not force nowrap')
+assert.ok(styleCss.includes('ui-tablewrap'), 'table sits in a padded wrap inside the card')
+// A mistyped theme token does not error — var() just falls back, which is how the
+// warning colour went quietly neutral for two releases. Both directions are
+// pinned: the misspelling must not return, the real name must be present.
+assert.ok(!styleCss.includes('--dsw-alias-state-warning-primary'), 'no misspelled warning token')
+assert.ok(styleCss.includes('--dsw-alias-state-warn-primary'), 'warning token resolves against the theme')
 
 // A catalog that failed discovery must announce itself.
 assert.match(render([[0, 'zh'], [1, 'ready'], [2, { ...payload, catalogComplete: false }]]), /技能目录可能不完整/)

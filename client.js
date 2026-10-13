@@ -53,6 +53,9 @@ window.__ModuleLoader__.load({
       source: '来源',
       srcBuiltin: '内置',
       srcLocal: '本机',
+      today: '今天',
+      yesterday: '昨天',
+      daysAgo: '{days} 天前',
       calls: '调用次数',
       split: '模型 / 用户',
       sessions: '会话数',
@@ -99,6 +102,9 @@ window.__ModuleLoader__.load({
       source: 'Source',
       srcBuiltin: 'Bundled',
       srcLocal: 'Local',
+      today: 'Today',
+      yesterday: 'Yesterday',
+      daysAgo: '{days}d ago',
       calls: 'Calls',
       split: 'Model / User',
       sessions: 'Sessions',
@@ -129,14 +135,16 @@ window.__ModuleLoader__.load({
     }
 
     // Five-step ramp, shared by every rule below. Values are deliberately close
-    // together: a dashboard reads better when few sizes compete.
+    // together: a dashboard reads better when few sizes compete. The title is the
+    // single display size and is a token like everything else — it used to be a
+    // hard-coded 18px, which quietly contradicted the ramp it sat above.
     const CSS = `
 .ui-page {
   --si-fs-2xs: 11px;
   --si-fs-xs: 12px;
   --si-fs-sm: 13px;
   --si-fs-md: 14px;
-  --si-fs-xl: 22px;
+  --si-fs-title: 19px;
   --si-num: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   /* The one accent every focus ring, bar and active glyph shares.
      NOT --dsw-alias-brand-primary: in the default theme that resolves to
@@ -145,59 +153,122 @@ window.__ModuleLoader__.load({
      is what DSH itself uses for focus rings and selection emphasis. */
   --si-accent: var(--dsw-alias-state-business-primary, var(--dsw-alias-brand-primary));
   height: 100%; overflow: auto;
-  background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
+  background: var(--si-canvas); color: var(--dsw-alias-label-primary);
+  caret-color: var(--si-accent);
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l2)) transparent;
+}
+/* The canvas is what was making the light theme read as unfinished. DSH resolves
+   bg-base AND bg-layer-1 to the same pure white in light mode, so layer-1 cards
+   on a bg-base page were white on white, separated by a 0.5px line and nothing
+   else. Dark separates them (#151517 vs #232324) which is why dark always read
+   better. neutral-bluish-100 is DSH's own static for a canvas behind white
+   surfaces and is nearly the exact grey of the reference design. It is applied
+   through body:not([data-ds-dark-theme]) so a future rename of the dark
+   attribute can only ever lose the grey — never paint a light grey over dark. */
+.ui-page { --si-canvas: var(--dsw-alias-bg-base); }
+body:not([data-ds-dark-theme]) .ui-page {
+  --si-canvas: var(--dsw-static-neutral-bluish-100, var(--dsw-alias-bg-base));
 }
 .ui-inner { max-width: 1200px; margin: 0 auto; padding: 26px 32px 52px; box-sizing: border-box; }
+
+/* Browser surfaces: selection, the caret and the scrollbar ship defaults that
+   belong to no design system. They are the cheapest signal that a surface was
+   built for its host rather than assembled inside it, and the one thing that is
+   almost always skipped. The @supports split is deliberate — color-mix against a
+   theme token is the only way to tint the accent without hard-coding a hex, and
+   the fallback is a solid accent rather than no selection styling at all. */
+.ui-page ::selection { background: var(--si-accent); color: var(--dsw-alias-bg-base); }
+@supports (background: color-mix(in srgb, red 20%, transparent)) {
+  .ui-page ::selection {
+    background: color-mix(in srgb, var(--si-accent) 24%, transparent);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+.ui-page::-webkit-scrollbar { width: 10px; height: 10px; }
+.ui-page::-webkit-scrollbar-track { background: transparent; }
+.ui-page::-webkit-scrollbar-thumb {
+  background-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l2));
+  border-radius: 999px; border: 3px solid transparent; background-clip: content-box;
+}
+.ui-page::-webkit-scrollbar-thumb:hover { background-color: var(--dsw-alias-label-tertiary); }
 
 @media (prefers-reduced-motion: reduce) {
   .ui-page * { transition: none !important; }
 }
 
 /* ---- header ---- */
-.ui-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.ui-title { font-size: 18px; line-height: 24px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.005em; }
-.ui-subtitle { font-size: var(--si-fs-xs); line-height: 18px; color: var(--dsw-alias-label-tertiary); margin: 0; }
+.ui-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.ui-title { font-size: var(--si-fs-title); line-height: 26px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+.ui-subtitle { font-size: var(--si-fs-xs); line-height: 19px; color: var(--dsw-alias-label-secondary); margin: 0; }
 .ui-actions { display: flex; align-items: center; gap: 10px; }
 
 .ui-btn {
   appearance: none; font: inherit; font-size: var(--si-fs-xs); line-height: 18px;
   padding: 5px 13px; border-radius: 8px;
   border: 0.5px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary);
-  cursor: pointer; transition: background-color .18s ease, border-color .18s ease;
+  background: var(--si-card); color: var(--dsw-alias-label-primary);
+  cursor: pointer; transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
 .ui-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); border-color: var(--dsw-alias-border-l4); }
 .ui-btn:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 2px; }
 .ui-btn:disabled { opacity: .5; cursor: default; }
 
-/* ---- kpi strip ---- */
-/* One ruled strip rather than four floating cards: it keeps the grid edge
-   aligned with the table below, and the hairlines give the numbers a rhythm
-   that separate boxes did not. Flex, not a fixed 4-column grid, because the
-   strip drops the orphan cell entirely when the count is zero — a metric that
-   reports "nothing happened" does not deserve a quarter of the panel. */
+/* ---- surfaces ---- */
+/* One elevation declaration per surface, as the craft floor asks. The shadow is
+   DSH's own lv1 — real offset and real blur, so it reads as lift rather than as
+   a decorative halo — and the 0.5px stroke stays because on a grey canvas the
+   hairline is what keeps a white card crisp at its edges. */
+.ui-page {
+  --si-card: var(--dsw-alias-bg-layer-1);
+  --si-lift: var(--dsw-shadow-lv1, 0 2px 4px 0 #0000000d);
+}
+
+/* ---- stats ---- */
+/* Kept as its own card because the brief is explicit about the shape: stats on
+   top, table below. Flex rather than a fixed grid so the strip still drops the
+   orphan cell when it is zero — a metric that reports "nothing happened" does
+   not deserve a quarter of the panel. */
 .ui-kpis {
   display: flex;
   border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
-  background: var(--dsw-alias-bg-layer-1); margin-bottom: 12px; overflow: hidden;
+  background: var(--si-card); box-shadow: var(--si-lift);
+  margin-bottom: 14px; overflow: hidden;
 }
-.ui-kpi { flex: 1 1 0; min-width: 0; padding: 11px 14px 12px; border-left: 0.5px solid var(--dsw-alias-border-l1); }
+.ui-kpi { flex: 1 1 0; min-width: 0; padding: 13px 16px 14px; border-left: 0.5px solid var(--dsw-alias-border-l1); }
 .ui-kpi:first-child { border-left: 0; }
-.ui-kpi-label { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); margin-bottom: 4px; }
+.ui-kpi-label { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary); margin-bottom: 5px; }
 .ui-kpi-value {
-  font-size: var(--si-fs-xl); line-height: 1; font-weight: 600;
+  font-size: 22px; line-height: 1; font-weight: 600;
   font-family: var(--si-num); font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
-.ui-kpi-sub { font-size: var(--si-fs-2xs); line-height: 15px; color: var(--dsw-alias-label-tertiary); margin-top: 5px; }
-/* The one KPI that is a problem rather than a statistic announces itself. */
+.ui-kpi-sub { font-size: var(--si-fs-2xs); line-height: 15px; color: var(--dsw-alias-label-secondary); margin-top: 6px; }
+/* The one KPI that is a problem rather than a statistic announces itself by its
+   number's colour alone. It deliberately does NOT also take a background tint:
+   the pale accent tint is blue and the warning is amber, and two signal colours
+   in one cell disagree about what kind of problem this is. */
 .ui-kpi.is-alert .ui-kpi-value { color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-label-primary)); }
 
-/* ---- card + toolbar ---- */
+/* ---- card ---- */
+/* No overflow:hidden here, deliberately. It would turn the card into a
+   scrollport, and a sticky table header sticks to its nearest scrolling
+   ancestor — the page, which is what we want. Any clipping-based tidy-up here
+   would silently kill the sticky header. The frame is closed with padding. */
 .ui-card {
   border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 14px;
-  background: var(--dsw-alias-bg-layer-1); padding: 12px 16px 2px; margin-bottom: 14px;
+  background: var(--si-card); box-shadow: var(--si-lift); margin-bottom: 14px;
 }
-.ui-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+/* A real card header with a hairline under it, rather than a search box floating
+   in the card's padding — the difference between a table and a data surface. */
+.ui-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 13px 13px 0 0;
+}
+/* Bottom padding closes the card under the last row, whose own border is
+   removed; at 2px the table used to bleed into the card's lower edge. */
+.ui-tablewrap { padding: 0 14px 8px; }
 /* Bounded: a search field stretched across the whole card reads as unfinished. */
 .ui-input {
   flex: 0 1 380px; min-width: 160px; font: inherit; font-size: var(--si-fs-sm);
@@ -233,7 +304,7 @@ window.__ModuleLoader__.load({
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: inset 0 -0.5px 0 var(--dsw-alias-border-l1);
   text-align: right; font-weight: 500; font-size: var(--si-fs-2xs);
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   padding: 6px 10px; white-space: nowrap;
 }
 .ui-table td {
@@ -250,14 +321,16 @@ window.__ModuleLoader__.load({
    only. Left to share the remainder equally, the six numeric columns each get
    ~94px and the timestamp wraps onto two lines, which doubles every row height.
    Hiding a column at a narrow width simply redistributes the slack. */
-.ui-table th:nth-child(1) { width: 46%; }
+.ui-table th:nth-child(1) { width: 48%; }
 .ui-table th:nth-child(2) { width: 7%; }
 .ui-table th:nth-child(3) { width: 9%; }
 .ui-table th:nth-child(4) { width: 9%; }
 .ui-table th:nth-child(5) { width: 6%; }
-.ui-table th:nth-child(6) { width: 13%; }
+.ui-table th:nth-child(6) { width: 11%; }
 .ui-table th:nth-child(7) { width: 10%; }
-.ui-table td.ui-col-last { white-space: nowrap; }
+/* The last-used column no longer forces nowrap. It renders a relative age, which
+   is a few characters wide, and if it ever does overflow, wrapping to two lines
+   is the correct failure — not painting over the neighbouring cell. */
 
 .ui-skill { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .ui-skill-name {
@@ -267,9 +340,13 @@ window.__ModuleLoader__.load({
 }
 /* Fills its cell rather than stopping short and leaving a void before the
    numeric columns. */
+/* Secondary, not tertiary: at 11px this is the text that tells two similarly
+   named skills apart, and tertiary measures 3.71:1 on white — below AA. The
+   theme's own tertiary is the lightest text step and it is reserved here for
+   text that is genuinely disposable. */
 .ui-skill-desc {
   font-size: var(--si-fs-2xs); line-height: 16px; min-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -279,15 +356,15 @@ window.__ModuleLoader__.load({
   border: 0.5px solid var(--dsw-alias-border-l2);
   color: var(--dsw-alias-label-secondary);
 }
-.ui-badge-warn { border-color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-border-l2)); color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary)); }
+.ui-badge-warn { border-color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-border-l2)); color: var(--dsw-alias-state-warn-primary, var(--dsw-alias-label-secondary)); }
 
-.ui-source { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); }
+.ui-source { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary); }
 .ui-muted { color: var(--dsw-alias-label-tertiary); }
 
 /* Numeric cells other than the call count recede: the count is the column that
    answers the question the panel exists to answer. */
 .ui-table td.ui-num { color: var(--dsw-alias-label-secondary); }
-.ui-table td.ui-num-zero, .ui-table td.ui-calls.is-zero { color: var(--dsw-alias-label-tertiary); }
+.ui-table td.ui-num-zero, .ui-table td.ui-calls.is-zero { color: var(--dsw-alias-label-secondary); }
 
 /* The call count, drawn over a share bar. The bar restates the number, never
    replaces it, so nothing here depends on colour alone. */
@@ -296,7 +373,7 @@ window.__ModuleLoader__.load({
    between rows whose numbers are 4 and 1. At .16 the rows all read as equal
    weight and the column stopped doing its job. */
 .ui-calls-bar { position: absolute; right: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--si-accent); opacity: .26; }
-.ui-calls-num { position: relative; font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-sm); }
+.ui-calls-num { position: relative; font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-md); }
 
 /* ---- trend ---- */
 /* 30 fixed-width bars need 120px, which no longer fits now that the columns are
@@ -304,13 +381,14 @@ window.__ModuleLoader__.load({
 .ui-spark { display: flex; align-items: flex-end; gap: 1px; height: 18px; width: 100%; max-width: 100%; }
 .ui-spark i { display: block; flex: 1 1 0; min-width: 0; border-radius: 1px; background: var(--si-accent); }
 .ui-spark i[data-empty="true"] { background: var(--dsw-alias-border-l2); height: 2px; }
-.ui-trend-none { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+.ui-trend-none { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
 
 /* ---- states ---- */
 .ui-empty, .ui-error {
   border: 0.5px dashed var(--dsw-alias-border-l2); border-radius: 12px;
   padding: 28px; text-align: center; font-size: var(--si-fs-sm);
-  color: var(--dsw-alias-label-tertiary);
+  background: var(--si-card); box-shadow: var(--si-lift);
+  color: var(--dsw-alias-label-secondary);
 }
 .ui-error { border-style: solid; border-color: var(--dsw-alias-state-error-primary, var(--dsw-alias-border-l2)); color: var(--dsw-alias-label-primary); }
 .ui-error code { font-family: var(--si-num); font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-tertiary); }
@@ -318,15 +396,20 @@ window.__ModuleLoader__.load({
 .ui-warn {
   display: flex; gap: 8px; align-items: flex-start; font-size: var(--si-fs-xs); line-height: 18px;
   color: var(--dsw-alias-label-secondary);
-  border: 0.5px solid var(--dsw-alias-state-warning-primary, var(--dsw-alias-border-l1));
+  border: 0.5px solid var(--dsw-alias-state-warn-primary, var(--dsw-alias-border-l1));
   border-radius: 10px; padding: 10px 12px; margin-bottom: 14px;
 }
 
 /* ---- footer ---- */
-.ui-footer { font-size: var(--si-fs-2xs); line-height: 17px; color: var(--dsw-alias-label-tertiary); }
+/* Secondary, not tertiary — and this one is not negotiable. The footer reads as
+   disposable grey, but it carries provenance: which home was scanned, how many
+   sessions, when, and how many could not be read. On the grey canvas tertiary
+   measures 3.18:1, which is worse than it was on white. Provenance is the one
+   thing this panel exists to be trusted about. */
+.ui-footer { font-size: var(--si-fs-2xs); line-height: 17px; color: var(--dsw-alias-label-secondary); }
 .ui-footer code { font-family: var(--si-num); }
 .ui-basis { margin-top: 8px; }
-.ui-basis summary { cursor: pointer; border-radius: 6px; width: fit-content; padding: 1px 0; }
+.ui-basis summary { cursor: pointer; border-radius: 6px; width: fit-content; padding: 1px 0; text-underline-offset: 2px; }
 .ui-basis summary:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 2px; }
 .ui-basis-text { margin: 6px 0 0; max-width: 76ch; }
 
@@ -365,6 +448,25 @@ window.__ModuleLoader__.load({
       if (row.source === 'bundled') return t('srcBuiltin')
       if (!row.source || row.source === 'user-agents') return t('srcLocal')
       return row.source
+    }
+
+    /**
+     * How long ago, in words.
+     *
+     * The cell used to print an absolute, year-less timestamp ("10月13日 10:45"),
+     which needed ~104px it did not have at sidebar-open widths and overflowed
+     into its neighbour — fixed layout means a percentage column never grows to
+     fit its content. A relative form answers the question the column actually
+     asks ("is this still alive?"), fits anywhere, and the absolute timestamp
+     stays reachable as the native tooltip.
+     */
+    function formatRelative(ts, t) {
+      const n = Number(ts) || 0
+      if (n <= 0) return ''
+      const days = Math.floor((Date.now() - n) / 86400000)
+      if (days <= 0) return t('today')
+      if (days === 1) return t('yesterday')
+      return format(t('daysAgo'), { days: formatCount(days) })
     }
 
     /** `1712345678901` -> `10月9日 14:03` / `Oct 9, 14:03`. */
@@ -689,9 +791,12 @@ window.__ModuleLoader__.load({
         'div',
         { className: 'ui-card' },
         toolbar,
-        rows.length === 0
-          ? h('div', { className: 'ui-empty', role: 'status' }, t('empty'))
-          : h(
+        h(
+          'div',
+          { className: 'ui-tablewrap' },
+          rows.length === 0
+            ? h('div', { className: 'ui-empty', role: 'status' }, t('empty'))
+            : h(
               'table',
               { className: 'ui-table' },
               h(
@@ -769,13 +874,20 @@ window.__ModuleLoader__.load({
                     h(
                       'td',
                       { className: `ui-num ui-col-last${calls === 0 ? ' ui-num-zero' : ''}` },
-                      row.lastAt ? formatTime(row.lastAt, locale) : t('never'),
+                      row.lastAt
+                        ? h(
+                            'span',
+                            { title: formatTime(row.lastAt, locale) },
+                            formatRelative(row.lastAt, t),
+                          )
+                        : t('never'),
                     ),
                     h('td', null, h(Trend, { trend: row.trend, t })),
                   )
                 }),
               ),
             ),
+          ),
       )
 
       const footer = h(
