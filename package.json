@@ -1,0 +1,69 @@
+{
+  "name": "dsh-skill-insights",
+  "version": "0.1.0",
+  "description": "Local skill usage analytics for DSH: every resolvable skill, and how often each one was actually invoked.",
+  "license": "MIT",
+  "author": "CSYANGA <yangchaosan1@163.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sanprophet/dsh-skill-insights.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sanprophet/dsh-skill-insights/issues"
+  },
+  "homepage": "https://github.com/sanprophet/dsh-skill-insights#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "agent-skills",
+    "skill",
+    "skills",
+    "usage",
+    "analytics"
+  ],
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.1.5-rc.2"
+  },
+  "meta": {
+    "title": "Skill Usage",
+    "description": "Every resolvable skill and how often it was invoked — model calls through the skill tool, plus explicit /skill-name injections. Reads this machine's session logs only."
+  },
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node index.js && node check-client.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

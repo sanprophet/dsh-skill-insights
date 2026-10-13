@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Skill Usage",
+    "description": "Every resolvable skill and how often it was invoked: model calls plus explicit user injections. Reads this machine only."
+  }
+}

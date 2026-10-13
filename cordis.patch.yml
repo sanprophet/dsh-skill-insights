@@ -1,0 +1,13 @@
+# dsh-skill-insights — 本机版配置
+#
+# 只读本机的 DSH 会话日志与 skill 目录，通过 DSH 自己的回环 Web 服务提供数据。
+# 不监听任何端口，不上报任何数据，不修改任何 skill。
+- insert:
+    - id: skill-insights
+      name: 'dsh-skill-insights'
+      config:
+        # 扫描间隔（秒）。每轮重读全部会话日志重算，默认 5 分钟。
+        # 日志量大到扫描超时之前，这个值不用动。
+        scanIntervalSeconds: 300
+        # 把用户 /技能名 的显式注入也计入用量。关掉就只统计模型调用。
+        includeUserInvocations: true
