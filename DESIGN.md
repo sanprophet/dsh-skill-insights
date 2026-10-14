@@ -515,6 +515,68 @@ node "$env:TEMP\preview-skill-insights.mjs"
 - **描述不再单独占一行**，改为整行悬停文本，一屏可见从 ~10 行涨到 ~16 行。描述没丢：同时保留在无障碍树
   （`.ui-sr`）和搜索范围内，只是不再被印出来 —— 标题属性挂在 `div` 上并不总能被读屏软件播报，所以补了
   一个 clip 的隐藏文本节点。
-- **技能名 12px/500 → 13px/600 等宽。** 之前它比旁边的调用次数（14px/600）更细更小，导致每行的**主键是
-  全行最轻的元素**，层次是倒的。
+- **技能名 12px/500 → 13px/600。** 之前它比旁边的调用次数（14px/600）更细更小，导致每行的**主键是全行
+  最轻的元素**，层次是倒的。（本节当时把它写成"等宽"，那是错的 —— 见 §11.9。）
+
+### 11.9 字体：整个面板一直在渲染新宋体
+
+用户连着两次说"字体不舒服"。第一次我改了字重和字号，没用 —— 因为问题不在粗细，在**字体本身选错了**。
+
+#### 根因：一个不存在的 token
+
+```css
+--si-num: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+```
+
+**`--dsw-font-family-mono` 在这套主题里根本不存在。** 在 `@deepseek-ai/*` 全树检索零命中。于是整条栈落空，
+落到通用 `monospace` 关键字 —— 在中文 Windows 上它解析成 **NSimSun（新宋体）**，一个点阵时代的老字体。
+
+调用次数、KPI 数字、技能名，全部在用它。
+
+#### 为什么之前所有检查都没发现
+
+`getComputedStyle().fontFamily` **只会把你请求的字体栈原样回显**，而"请求的栈是否存在"恰恰是这里存疑的
+东西。任何针对样式表的断言都发现不了它 —— 它读起来完全正确。
+
+抓住它的是 Chrome 的 `CSS.getPlatformFontsForNode`，它报告的是**实际参与光栅化的平台字体**：
+
+| 选择器 | 请求的栈 | 实际使用 |
+|---|---|---|
+| `.ui-skill-name` | ui-monospace, SFMono-Regular, Menlo, monospace | **NSimSun** |
+| `.ui-calls-num` | 同上 | **NSimSun** |
+| `.ui-kpi-value` | 同上 | **NSimSun** |
+
+修复后同样的探针报告主题的 UI 字体，且**没有任何角色再报 NSimSun**。真正的 token 是 `--ds-font-family-code`
+（在 Windows 上落到 Consolas）。
+
+教训：**字体是否生效，必须看平台字体报告，不能看计算样式。** 这与"颜色必须看渲染像素、不能看样式表里的
+hex"是同一条原则 —— 样式表描述的是意图，不是结果。
+
+#### 顺带纠正：技能名和数字不该用等宽
+
+查证时回看参考图，放大的字母形态显示 `archify` / `text-polisher` 是**比例粗体无衬线**（等宽的话 `i` 会和
+`h` 一样宽）。参考图整个界面没有等宽字体。DSH 自己也一样：`--dsw-font-family` 用于全部内容，
+`--ds-font-family-code` 只给 markdown 代码块。
+
+所以等宽是**这个文件自己的主意**，而且是个坏主意：带连字符的标识符在等宽下每个字符等宽，完全没有节奏感。
+即使字体解析正确，读起来也是紧的。现在技能名、调用次数、KPI 数字都走 UI 字体，对齐交给
+`font-variant-numeric: tabular-nums` —— 拿到等宽的对齐好处，不用付等宽的观感代价。
+
+#### 第二个隐患：序列化时的引号转义
+
+预览工具把 React 树序列化成 HTML 时，对 `<style>` 的内容也做了 HTML 转义。而 `<style>` 是 raw-text 元素，
+浏览器**不解码**其中的实体 —— 于是 `"Liberation Mono"` 变成 `&quot;Liberation Mono&quot;`，整条声明静默
+失效。这正是 `--si-num` 在预览里解析为 undefined、却查不出原因的原因。
+
+两处都修了：预览工具不再转义 raw-text 元素；CSS 里的字体族名改成**不带引号**（CSS 允许多词字族名写成标识符
+序列），从根上避开这一类隐患 —— 这个值将来还会被别的序列化器处理。
+
+#### check-client 现在钉住什么
+
+断言**用途**而不是**提及**（注释里就写着 `--dsw-font-family-mono` 这个名字）：
+
+- `--si-num` 里不许出现 `--dsw-font-family-mono`，必须出现 `--ds-font-family-code` 和 CJK 回退；
+- `.ui-skill-name` / `.ui-calls-num` / `.ui-kpi-value` 都不许自带 `font-family`。
+
+样式表断言抓不到原始 bug，但这三条至少能防止它换个形式回来。
 

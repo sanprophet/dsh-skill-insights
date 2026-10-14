@@ -54,6 +54,29 @@
 另外给描述加 `title`，让截断不损失信息 —— UX 规范里"截断"只是 Medium 级，但"区分性文字必须能读到
 全文"是 Critical 级。`check-client.mjs` 增加了这三条声明的断言，防止再次静默退化。
 
+### 字体：整个面板一直在渲染新宋体
+
+用户连着说"字体不舒服"。第一次改的是字重和字号，没用 —— 问题不在粗细，在**字体选错了**。
+
+- **根因：`--dsw-font-family-mono` 这个 token 不存在。** 在 `@deepseek-ai/*` 全树检索零命中。整条栈落空，
+  落到通用 `monospace` 关键字 —— 中文 Windows 上解析成 **NSimSun（新宋体）**。调用次数、KPI 数字、
+  技能名全都在用它。
+- **为什么之前发现不了：** `getComputedStyle().fontFamily` 只会把你请求的栈原样回显，而"请求的栈是否存在"
+  恰恰是这里存疑的东西 —— 任何针对样式表的断言都读不出问题。抓住它的是 Chrome 的
+  `CSS.getPlatformFontsForNode`，它报告**实际参与光栅化**的平台字体。修复后该探针报告主题的 UI 字体，
+  无一处再报 NSimSun。真正的 token 是 `--ds-font-family-code`（Windows 上落到 Consolas）。
+- **顺带纠正：技能名和数字不该用等宽。** 回看参考图，放大后的字母形态显示 `archify` / `text-polisher` 是
+  **比例**粗体无衬线（等宽的话 `i` 会和 `h` 一样宽）；参考图整个界面没有等宽字体，DSH 自己也只把 code 栈
+  留给 markdown 代码块。等宽是这个文件自己的主意，而且是个坏主意 —— 带连字符的标识符在等宽下完全没有
+  节奏感，字体解析正确了也还是紧的。现在走 UI 字体，对齐交给 `font-variant-numeric: tabular-nums`。
+- **顺带修掉一个序列化隐患：** 预览工具把 React 树序列化成 HTML 时，对 `<style>` 的内容也做了 HTML 转义。
+  但 `<style>` 是 raw-text 元素，浏览器**不解码**其中的实体 —— `"Liberation Mono"` 会变成
+  `&quot;Liberation Mono&quot;`，整条声明静默失效。预览工具已修；CSS 里的字体族名也改成**不带引号**
+  （CSS 允许多词字族名写成标识符序列），从根上避开这一类隐患。
+- `check-client.mjs` 新增断言，钉的是**用途**而不是**提及**（注释里本来就有那个 token 名）：`--si-num`
+  不许引用不存在的 token、必须引用 `--ds-font-family-code` 且带 CJK 回退；技能名 / 调用次数 / KPI 数字
+  都不许自带 `font-family`。
+
 ### 按参考设计重做（第四轮）
 
 参考图不是风格板，而是一份**技能管理器**的设计稿（顶部统计区 + 状态页签 + 筛选行 + 表格）。按图重做，
