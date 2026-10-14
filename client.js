@@ -13,7 +13,8 @@
  * Visual system notes (see DESIGN.md §11):
  *   - Type scale is a fixed five-step ramp, never ad-hoc sizes.
  *   - Borders are 0.5px hairlines, matching the host shell's own language.
- *   - Every number is tabular and monospaced so columns align and compare.
+ *   - Numbers are tabular (font-variant-numeric) so columns align and compare;
+ *     monospace is reserved for genuinely code-shaped text and nothing else.
  *   - Colour never carries a meaning on its own; the value always says it too.
  *   - Focus is always visible, and motion always yields to reduced-motion.
  *
@@ -32,7 +33,7 @@ window.__ModuleLoader__.load({
     /** Locale namespace owned by this plugin. */
     const NS = 'skill-insights'
     /** Bumped only to be visible in the served bundle. */
-    const BUILD = 'skill-insights-4'
+    const BUILD = 'skill-insights-5'
     /** Same-origin route registered by the Host half. */
     const ROUTE = '/skill-insights/summary'
 
@@ -161,7 +162,21 @@ window.__ModuleLoader__.load({
   --si-fs-sm: 13px;
   --si-fs-md: 14px;
   --si-fs-title: 19px;
-  --si-num: var(--dsw-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  /* NOT --dsw-font-family-mono. That token does not exist in this theme, so the
+     whole stack missed and fell through to the generic "monospace" keyword,
+     which on a Chinese Windows install resolves to NSimSun (新宋体) — a
+     bitmap-era face that every number and every skill name in this panel was
+     silently rendering in. Chrome confirms it: CSS.getPlatformFontsForNode
+     reported NSimSun, not any font we actually asked for. --ds-font-family-code
+     is the theme's real code stack and lands on Consolas here; it is spelled out
+     again as a fallback so the panel survives a rename of the token.
+
+     Family names are unquoted on purpose. CSS allows a multi-word family to be a
+     sequence of identifiers, and this value sits inside a JS template literal
+     that gets serialised into a <style> element — one round of HTML escaping is
+     all it takes to turn "Liberation Mono" into &quot;Liberation Mono&quot; and
+     kill the declaration silently, leaving the text to inherit from nowhere. */
+  --si-num: var(--ds-font-family-code, Consolas, Menlo, Courier, Microsoft YaHei, monospace);
   /* The one accent every focus ring, bar and active glyph shares.
      NOT --dsw-alias-brand-primary: in the default theme that resolves to
      #0f1115, i.e. the same near-black as body text, so an accent built on it
@@ -273,7 +288,7 @@ body:not([data-ds-dark-theme]) .ui-page {
 .ui-kpi-label { font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary); margin-bottom: 5px; }
 .ui-kpi-value {
   font-size: 22px; line-height: 1; font-weight: 600;
-  font-family: var(--si-num); font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
 .ui-kpi-sub { font-size: var(--si-fs-2xs); line-height: 15px; color: var(--dsw-alias-label-secondary); margin-top: 6px; }
@@ -389,11 +404,15 @@ body:not([data-ds-dark-theme]) .ui-page {
    row's tooltip, which is what lets the table show twice as many rows — the
    second line was the whole reason a reader could only ever see a dozen. */
 .ui-skill { display: flex; align-items: center; gap: 7px; min-width: 0; }
-/* 13px/600 monospace, not 12px/500. At 12px/500 the identifiers read visibly
-   fainter than the 14px/600 call counts sitting beside them, and a table whose
-   primary key is its lightest element has its hierarchy upside down. */
+/* Sans, not monospace. The reference draws its skill names in the UI face at a
+   bold weight, and so does DSH itself: the host reserves the code stack for
+   markdown code and sets everything else in --dsw-font-family. Monospace here
+   was this file's own idea, and it is what made the names feel wrong — the
+   identifiers carried hyphens at uniform advance width, which reads as cramped
+   even once the font resolved correctly. Alignment still holds where it matters,
+   because every numeric cell carries tabular-nums. */
 .ui-skill-name {
-  font-family: var(--si-num); font-size: var(--si-fs-sm); font-weight: 600;
+  font-size: var(--si-fs-sm); font-weight: 600;
   color: var(--dsw-alias-label-primary);
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -420,7 +439,7 @@ body:not([data-ds-dark-theme]) .ui-page {
    replaces it, so nothing here depends on reading a length. A zero draws an
    empty track rather than no bar, so the column keeps its rhythm. */
 .ui-calls-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
-.ui-calls-num { font-family: var(--si-num); font-weight: 600; font-size: var(--si-fs-md); line-height: 1; }
+.ui-calls-num { font-weight: 600; font-size: var(--si-fs-md); line-height: 1; font-variant-numeric: tabular-nums; }
 .ui-calls-track {
   display: block; width: 68px; max-width: 100%; height: 4px;
   border-radius: 999px; background: var(--dsw-alias-border-l2); overflow: hidden;

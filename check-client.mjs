@@ -219,6 +219,24 @@ assert.ok(!styleCss.includes('ui-col-split'), 'the split column is gone')
 // pinned: the misspelling must not return, the real name must be present.
 assert.ok(!styleCss.includes('--dsw-alias-state-warning-primary'), 'no misspelled warning token')
 assert.ok(styleCss.includes('--dsw-alias-state-warn-primary'), 'warning token resolves against the theme')
+// Typography. --dsw-font-family-mono does not exist in this theme, so a stack
+// built on it fell through to the generic monospace keyword, which on a Chinese
+// Windows install is NSimSun — a bitmap-era face that every number and skill name
+// was silently rendering in. Only Chrome's own platform-font report caught it; no
+// assertion on the stylesheet could have, which is why the token is pinned by
+// name here and the *use* is what gets tested, not the mention.
+assert.ok(!/font-family:\s*var\(--dsw-font-family-mono/.test(styleCss), 'no use of the invented mono token')
+assert.ok(!/--si-num:[^;]*--dsw-font-family-mono/.test(styleCss), 'the numeric stack names no undefined token')
+assert.ok(/--si-num:[^;]*--ds-font-family-code/.test(styleCss), 'the numeric stack uses the theme code font')
+assert.ok(/--si-num:[^;]*Microsoft YaHei/.test(styleCss), 'the code stack keeps a CJK fallback')
+// The reference draws its skill names and its numbers in the UI face, and so does
+// DSH — the host reserves the code stack for markdown code. Monospace here was
+// this file's own idea, and it read as cramped long before the font resolved
+// correctly, because hyphenated identifiers at uniform advance width have no
+// rhythm. Alignment is kept by tabular-nums instead.
+assert.ok(!/\.ui-skill-name\s*\{[^}]*font-family/.test(styleCss), 'the skill name uses the UI face')
+assert.ok(!/\.ui-calls-num\s*\{[^}]*font-family/.test(styleCss), 'the call count uses the UI face')
+assert.ok(!/\.ui-kpi-value\s*\{[^}]*font-family/.test(styleCss), 'the KPI value uses the UI face')
 
 // A catalog that failed discovery must announce itself.
 assert.match(render([[0, 'zh'], [1, 'ready'], [2, { ...payload, catalogComplete: false }]]), /技能目录可能不完整/)
