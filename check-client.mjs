@@ -183,23 +183,25 @@ assert.match(ready, /使用过 2/, 'the used tab carries its count')
 assert.match(ready, /从未使用 1/, 'the never-used tab carries its count')
 assert.match(ready, /搜索技能名称或说明/, 'the search field is offered')
 assert.match(ready, /使用时间/, 'the last-used filter is offered')
+// The description is no longer visible table text, so it has to reach the render
+// two other ways to still count as present: as the row's hover text, and as text
+// a screen reader can reach without a mouse.
+assert.match(ready, /laziest solution that works/, 'the description survives as the row tooltip')
 assert.doesNotMatch(ready, /MISSING:/, 'no locale key is missing')
 
 // The stylesheet travels inside the rendered tree, so the invariants that a
 // DOM-free render check cannot see are still assertable here. These declarations
-// belong together: without `table-layout: fixed`, the nowrap description
-// contributes its whole sentence as column one's min-content width, the other
-// six columns are pushed clean out of the viewport, and the panel reads as a
-// one-column table with text spilling off the card.
+// belong together: without `table-layout: fixed`, the widest cell contributes
+// its whole content as column one's min-content width, the other three columns
+// are pushed clean out of the viewport, and the panel reads as a one-column
+// table with text spilling off the card.
 const styleCss = ready.slice(0, ready.indexOf('</style>'))
 assert.ok(styleCss.includes('table-layout: fixed'), 'table uses fixed layout')
-assert.match(styleCss, /\.ui-skill-desc\s*\{[^}]*overflow: hidden/, 'description clips its overflow')
-assert.match(styleCss, /\.ui-skill-desc\s*\{[^}]*text-overflow: ellipsis/, 'description ellipsises')
-// The last-used cell renders a relative age and deliberately does not clamp with
-// nowrap: when a percentage column runs out of room, wrapping is the correct
-// failure and overlapping the next column is not.
-assert.ok(!/\.ui-table td\.ui-col-last\s*\{[^}]*white-space:\s*nowrap/.test(styleCss), 'last-used does not force nowrap')
+assert.match(styleCss, /\.ui-skill-name\s*\{[^}]*overflow: hidden/, 'the skill name clips its overflow')
+assert.match(styleCss, /\.ui-skill-name\s*\{[^}]*text-overflow: ellipsis/, 'the skill name ellipsises')
 assert.ok(styleCss.includes('ui-tablewrap'), 'table sits in a padded wrap inside the card')
+assert.ok(styleCss.includes('ui-sr'), 'the description stays in the accessibility tree')
+assert.ok(!styleCss.includes('ui-skill-desc'), 'the description line is gone from the table')
 // The structure the reference added, and the structure it replaced. Both
 // directions are pinned, so a later edit cannot quietly bring back a checkbox
 // that can only say yes or no, or a sparkline that never draws.

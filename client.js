@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({
     /** Locale namespace owned by this plugin. */
     const NS = 'skill-insights'
     /** Bumped only to be visible in the served bundle. */
-    const BUILD = 'skill-insights-3'
+    const BUILD = 'skill-insights-4'
     /** Same-origin route registered by the Host half. */
     const ROUTE = '/skill-insights/summary'
 
@@ -56,6 +56,7 @@ window.__ModuleLoader__.load({
       optToday: '今天',
       optWeek: '近 7 天',
       optMonth: '近 30 天',
+      pick: '{dim}：{value}',
       tabAll: '全部 {count}',
       tabUsed: '使用过 {count}',
       tabNever: '从未使用 {count}',
@@ -112,6 +113,7 @@ window.__ModuleLoader__.load({
       optToday: 'Today',
       optWeek: 'Last 7 days',
       optMonth: 'Last 30 days',
+      pick: '{dim}: {value}',
       tabAll: 'All {count}',
       tabUsed: 'Used {count}',
       tabNever: 'Never used {count}',
@@ -348,14 +350,13 @@ body:not([data-ds-dark-theme]) .ui-page {
 /* ---- table ---- */
 /* The page is the vertical scroller, not this card, so the header can stick to
    the top of the viewport. That is also why the table has no horizontal scroll
-   wrapper: an overflow container would capture the sticky axis and kill it.
-   Narrow layouts drop low-priority columns instead. */
+   wrapper: an overflow container would capture the sticky axis and kill it. */
 /* table-layout: fixed is load-bearing, not cosmetic. Under the default auto,
-   a white-space: nowrap description contributes its entire sentence as the
-   cell's min-content width, so width: 50% on column one is silently ignored:
-   that column swallows the table and the other six are pushed clean out of the
-   viewport — which reads as a one-column table with text spilling off the card.
-   Fixed layout is what makes the percentage widths and the ellipsis take effect. */
+   the widest cell contributes its whole content as that column's min-content
+   width, so an explicit percentage on column one is silently ignored: the column
+   swallows the table and the rest are pushed clean out of the viewport — which
+   reads as a one-column table with text spilling off the card. Fixed layout is
+   what makes the percentage widths and the ellipsis take effect. */
 .ui-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: var(--si-fs-sm); }
 .ui-table th {
   position: sticky; top: 0; z-index: 2;
@@ -384,26 +385,24 @@ body:not([data-ds-dark-theme]) .ui-page {
 .ui-table th:nth-child(2) { width: 17%; }
 .ui-table th:nth-child(3) { width: 20%; }
 .ui-table th:nth-child(4) { width: 17%; }
-/* The last-used column no longer forces nowrap. It renders a relative age, which
-   is a few characters wide, and if it ever does overflow, wrapping to two lines
-   is the correct failure — not painting over the neighbouring cell. */
-
-.ui-skill { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+/* One line per skill: the name, plus any badges. The description moved into the
+   row's tooltip, which is what lets the table show twice as many rows — the
+   second line was the whole reason a reader could only ever see a dozen. */
+.ui-skill { display: flex; align-items: center; gap: 7px; min-width: 0; }
+/* 13px/600 monospace, not 12px/500. At 12px/500 the identifiers read visibly
+   fainter than the 14px/600 call counts sitting beside them, and a table whose
+   primary key is its lightest element has its hierarchy upside down. */
 .ui-skill-name {
-  display: flex; align-items: center; gap: 7px;
-  font-family: var(--si-num); font-size: var(--si-fs-xs); font-weight: 500;
+  font-family: var(--si-num); font-size: var(--si-fs-sm); font-weight: 600;
   color: var(--dsw-alias-label-primary);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* Fills its cell rather than stopping short and leaving a void before the
-   numeric columns. */
-/* Secondary, not tertiary: at 11px this is the text that tells two similarly
-   named skills apart, and tertiary measures 3.71:1 on white — below AA. The
-   theme's own tertiary is the lightest text step and it is reserved here for
-   text that is genuinely disposable. */
-.ui-skill-desc {
-  font-size: var(--si-fs-2xs); line-height: 16px; min-height: 16px;
-  color: var(--dsw-alias-label-secondary);
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* The description is a tooltip now, so it is no longer visible text. This keeps
+   it in the accessibility tree, where a bare title attribute on a div is not
+   reliably announced. */
+.ui-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
 .ui-badge {
@@ -475,7 +474,6 @@ body:not([data-ds-dark-theme]) .ui-page {
 }
 @media (max-width: 680px) {
   .ui-kpi { flex: 1 1 100%; }
-  .ui-skill-desc { max-width: 30ch; }
 }
 `
 
@@ -850,6 +848,11 @@ body:not([data-ds-dark-theme]) .ui-page {
         ),
       )
 
+      // Both dropdowns would otherwise read "全部" side by side, with the
+      // dimension buried in an aria-label that no sighted reader ever sees. The
+      // reference spells the dimension into the control itself, so this does.
+      const pick = (dim, value) => format(t('pick'), { dim: t(dim), value: t(value) })
+
       const filters = h(
         'div',
         { className: 'ui-filters' },
@@ -869,9 +872,9 @@ body:not([data-ds-dark-theme]) .ui-page {
             'aria-label': t('filterSource'),
             onChange: (event) => setSourceFilter(event.target.value),
           },
-          h('option', { value: 'all' }, t('optAll')),
-          h('option', { value: 'local' }, t('optLocal')),
-          h('option', { value: 'builtin' }, t('optBuiltin')),
+          h('option', { value: 'all' }, pick('filterSource', 'optAll')),
+          h('option', { value: 'local' }, pick('filterSource', 'optLocal')),
+          h('option', { value: 'builtin' }, pick('filterSource', 'optBuiltin')),
         ),
         h(
           'select',
@@ -881,10 +884,10 @@ body:not([data-ds-dark-theme]) .ui-page {
             'aria-label': t('filterTime'),
             onChange: (event) => setTimeFilter(event.target.value),
           },
-          h('option', { value: 'all' }, t('optAll')),
-          h('option', { value: 'today' }, t('optToday')),
-          h('option', { value: 'week' }, t('optWeek')),
-          h('option', { value: 'month' }, t('optMonth')),
+          h('option', { value: 'all' }, pick('filterTime', 'optAll')),
+          h('option', { value: 'today' }, pick('filterTime', 'optToday')),
+          h('option', { value: 'week' }, pick('filterTime', 'optWeek')),
+          h('option', { value: 'month' }, pick('filterTime', 'optMonth')),
         ),
       )
 
@@ -933,26 +936,18 @@ body:not([data-ds-dark-theme]) .ui-page {
                       null,
                       h(
                         'div',
-                        { className: 'ui-skill' },
-                        h(
-                          'div',
-                          { className: 'ui-skill-name' },
-                          row.name,
-                          row.cataloged ? null : h('span', { className: 'ui-badge ui-badge-warn' }, t('orphanBadge')),
-                          row.cataloged && row.modelInvocable === false
-                            ? h('span', { className: 'ui-badge' }, t('userOnly'))
-                            : null,
-                          row.cataloged && row.userInvocable === false
-                            ? h('span', { className: 'ui-badge' }, t('modelOnly'))
-                            : null,
-                        ),
-                        // The full description stays reachable through the native
-                        // tooltip: truncation is fine, losing the text is not.
-                        h(
-                          'div',
-                          { className: 'ui-skill-desc', title: row.description || undefined },
-                          row.description || '',
-                        ),
+                        { className: 'ui-skill', title: row.description || undefined },
+                        h('span', { className: 'ui-skill-name' }, row.name),
+                        row.cataloged ? null : h('span', { className: 'ui-badge ui-badge-warn' }, t('orphanBadge')),
+                        row.cataloged && row.modelInvocable === false
+                          ? h('span', { className: 'ui-badge' }, t('userOnly'))
+                          : null,
+                        row.cataloged && row.userInvocable === false
+                          ? h('span', { className: 'ui-badge' }, t('modelOnly'))
+                          : null,
+                        // The description is the row's hover text now. This keeps
+                        // it readable without a mouse, and searchable.
+                        h('span', { className: 'ui-sr' }, row.description || ''),
                       ),
                     ),
                     h(
