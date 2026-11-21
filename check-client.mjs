@@ -88,15 +88,43 @@ assert.deepEqual(zhKeys, enKeys, 'zh and en expose the same keys')
 /** Flatten a fake element tree into a searchable string. `title` and `aria-label`
  * are both included: a tooltip holds text a reader can reach (truncated
  * descriptions, absolute timestamps), and aria-label names a control that has no
- * visible label of its own (the two filter selects). Without them the accessible
- * names would be unassertable from a DOM-free render. */
+ * visible label of its own (the two filter selects, the sort buttons). Without
+ * them the accessible names would be unassertable from a DOM-free render.
+ *
+ * `className` is included for a different reason: a region's place in the reading
+ * order is a structural fact this check can verify, but only if the classes are
+ * in the string. That is also what made the closing `</style>` marker below real
+ * — flatten used not to emit one, so `styleCss` was silently the whole render
+ * tree rather than the stylesheet, and every stylesheet assertion was passing
+ * against markup that merely happened to contain the same class names. */
 function flatten(node) {
   if (node === null || node === undefined || node === false || node === true) return ''
   if (typeof node === 'string' || typeof node === 'number') return String(node)
   if (Array.isArray(node)) return node.map(flatten).join(' ')
+  // A function element has to be *called*, the way a real renderer does it. It
+  // used not to be: the stand-in emitted `String(node.type)` instead, i.e. the
+  // component's own source code, so the rail's cards and the chart were never
+  // rendered by this check at all — and any string that happened to appear inside
+  // a component body (a class name, a label) counted as if it were on screen.
+  // Every component reached this way is deliberately hook-free, which is what
+  // keeps calling it here equivalent to React calling it.
+  if (typeof node.type === 'function') {
+    const props = { ...(node.props && typeof node.props === 'object' ? node.props : {}) }
+    const children = node.children
+    if (children && children.length === 1) props.children = children[0]
+    else if (children && children.length > 1) props.children = children
+    return flatten(node.type(props))
+  }
+  if (node.type === 'style') return `<style>${flatten(node.children)}</style>`
   const props = node.props && typeof node.props === 'object' ? node.props : {}
-  const attrs = ` ${props.title || ''} ${props['aria-label'] || ''}`
-  return `${String(node.type)} ${flatten(node.children)}${attrs}`
+  const attrs = ` ${props.className || ''} ${props.title || ''} ${props['aria-label'] || ''}`
+  const state = ` ${props['aria-sort'] || ''} ${props['aria-expanded'] || ''}`
+  return `${String(node.type)} ${flatten(node.children)}${attrs}${state}`
+}
+
+/** Everything after the stylesheet: the rendered markup on its own. */
+function markupOf(text) {
+  return text.slice(text.indexOf('</style>') + '</style>'.length)
 }
 
 function render(seedValues) {
@@ -237,6 +265,118 @@ assert.ok(/--si-num:[^;]*Microsoft YaHei/.test(styleCss), 'the code stack keeps 
 assert.ok(!/\.ui-skill-name\s*\{[^}]*font-family/.test(styleCss), 'the skill name uses the UI face')
 assert.ok(!/\.ui-calls-num\s*\{[^}]*font-family/.test(styleCss), 'the call count uses the UI face')
 assert.ok(!/\.ui-kpi-value\s*\{[^}]*font-family/.test(styleCss), 'the KPI value uses the UI face')
+
+// ---- §12: the insight rail, the expanded row, sorting ----------------------
+// The rail carries the evidence the table cannot, and entering the reading order
+// only *after* the record is a structural promise rather than a stylistic one: a
+// supporting region that came first would take the top of the page from the
+// table. Both the promise and each card are pinned here.
+assert.ok(styleCss.includes('ui-railcard'), 'the rail card surface exists')
+assert.ok(styleCss.includes('ui-trend-bar'), 'the activity chart draws bars')
+assert.ok(styleCss.includes('ui-dist-track'), 'the distribution cards draw magnitude bars')
+assert.ok(styleCss.includes('ui-detail-row'), 'the expanded row has a surface of its own')
+assert.ok(styleCss.includes('ui-caret'), 'the disclosure caret is drawn, not typeset')
+assert.ok(styleCss.includes('ui-sort-icon'), 'the sort arrow is drawn, not typeset')
+// The split asks the panel its own width, because the shell's sidebar and the
+// panel's 1200px cap both change how much room the table actually has and a media
+// query can see neither. The fallback keeps the complete single-column order for a
+// browser without container queries rather than collapsing the layout.
+assert.ok(styleCss.includes('container-type: inline-size'), 'the split queries a container, not the viewport')
+assert.ok(styleCss.includes('@container si'), 'the two-column split is a container query')
+assert.ok(styleCss.includes('@supports not (container-type: inline-size)'), 'a browser without container queries still gets the split')
+// One elevation declaration per surface. A border under a wide shadow is the
+// ghost card the craft floor names, and this panel has enough surfaces already.
+assert.ok(!/\.ui-railcard\s*\{[^}]*box-shadow/.test(styleCss), 'rail cards carry no shadow')
+assert.ok(!/\.ui-card\s*\{[^}]*overflow:\s*hidden/.test(styleCss), 'the card is never a scrollport, which would kill the sticky header')
+
+const markup = markupOf(ready)
+const tableAt = markup.indexOf('ui-table')
+const railAt = markup.indexOf('ui-railcard')
+assert.ok(tableAt > -1, 'the record is rendered')
+assert.ok(railAt > tableAt, 'the rail follows the record in DOM order, it never precedes it')
+assert.equal((markup.match(/ui-railcard/g) || []).length, 3, 'three rail cards: activity, source, invocation mode')
+assert.match(markup, /近 30 天活动/, 'the activity card is titled')
+assert.match(markup, /来源分布/, 'the source split is titled')
+assert.match(markup, /调用方式/, 'the invocation-mode split is titled')
+
+// The chart. Fixture trends [0,1,0,2] + [0,0] + [1,0] sum to [1,1,0,2] over four
+// trailing days: 4 calls, 3 active days, peak 2. Every one of those has to be
+// printed as well as drawn — a bar is not a quantity a reader can look up, and the
+// per-row sparkline this panel deleted failed for exactly that reason.
+assert.equal((markup.match(/ui-trend-bar/g) || []).length, 4, 'one bar per trailing day in the payload')
+assert.match(markup, /共 4 次 · 活跃 3 天 · 最高 2 次/, 'the chart states every number its bars encode')
+assert.match(markup, /10月\d+日 · \d+ 次/, 'each bar names its own day and count')
+
+// The two distribution cards, and the sentence that makes the second one worth
+// having: a skill the model cannot pick has never been offered to it.
+assert.match(markup, /本机 2 · 内置 0/, 'the available-skills tile splits local from bundled')
+assert.match(markup, /占可用技能的 50%/, 'the used tile reports a share rather than repeating another tile')
+assert.match(markup, /模型 2 · 用户 1/, 'the calls tile carries the model/user split of the total')
+assert.match(markup, /模型与用户/, 'the invocation-mode card names a mode')
+assert.match(markup, /模型可自行选用，也能用 \/名称 显式调用/, 'the mode card explains itself')
+
+// Sorting. The header control names its own state: an arrow alone is a direction
+// with no dimension, and the accessible name is the only place that can say which
+// column is active.
+assert.match(markup, /按使用次数排序，当前降序/, 'the active sort column names dimension and direction')
+assert.match(markup, /按技能排序/, 'an inactive column still offers itself as sortable')
+assert.match(markup, /descending/, 'the active column carries aria-sort')
+
+// The expanded row. One at a time, and exercised by seeding the last useState.
+// This is where the facts the four columns deliberately do not carry — first use,
+// provider, the model/user split, and the whole description — become readable text
+// instead of hover text.
+assert.ok(!markup.includes('ui-detail-row'), 'nothing is expanded until a row is opened')
+const expanded = render([[0, 'zh'], [1, 'ready'], [2, payload], [9, 'ponytail']])
+const expandedMarkup = markupOf(expanded)
+assert.equal((expandedMarkup.match(/ui-detail-row/g) || []).length, 1, 'one row at a time')
+assert.match(expanded, /ui-caret is-open/, 'the open row shows the open caret')
+assert.ok(!markup.includes('ui-caret is-open'), 'the closed row shows the closed caret')
+assert.match(expanded, /laziest solution that works/, 'the expanded row prints the full description')
+assert.match(expanded, /首次使用/, 'the expanded row reports first use')
+assert.match(expanded, /涉及会话/, 'the expanded row reports the session count')
+assert.match(expanded, /提供者/, 'the expanded row reports the provider')
+assert.match(expanded, /收起 ponytail 的详情/, 'the open disclosure offers to close')
+assert.match(markup, /展开 ponytail 的详情/, 'the closed disclosure offers to open')
+assert.doesNotMatch(expanded, /MISSING:/, 'the expanded row uses only real locale keys')
+
+// The never-used tile is only honest if it says *why*. A skill with
+// modelInvocable:false can never be chosen by the model, so counting it as
+// neglected would be reading a flag as a verdict; both the tile and the mode card
+// have to say so instead of folding it into a total.
+const userOnly = render([
+  [0, 'zh'],
+  [1, 'ready'],
+  [
+    2,
+    {
+      ...payload,
+      skills: [
+        ...payload.skills,
+        {
+          name: 'hand-only',
+          calls: 0,
+          model: 0,
+          user: 0,
+          sessions: 0,
+          lastAt: 0,
+          firstAt: 0,
+          trend: [],
+          cataloged: true,
+          description: '',
+          source: 'user-agents',
+          modelInvocable: false,
+          userInvocable: true,
+        },
+      ],
+    },
+  ],
+])
+assert.match(userOnly, /其中 1 个只能用 \/名称 调用/, 'the never-used tile says why a skill is idle')
+assert.match(userOnly, /只能用 \/名称 显式调用，模型不会自己选它/, 'the mode card explains the user-only case')
+assert.match(userOnly, /1 个从未被调用/, 'the mode card counts the idle ones')
+assert.match(userOnly, /仅用户/, 'the row badge marks a user-only skill')
+assert.doesNotMatch(userOnly, /MISSING:/, 'the user-only path uses only real locale keys')
 
 // A catalog that failed discovery must announce itself.
 assert.match(render([[0, 'zh'], [1, 'ready'], [2, { ...payload, catalogComplete: false }]]), /技能目录可能不完整/)
