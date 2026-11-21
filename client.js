@@ -39,7 +39,7 @@ window.__ModuleLoader__.load({
     /** Locale namespace owned by this plugin. */
     const NS = 'skill-insights'
     /** Bumped only to be visible in the served bundle. */
-    const BUILD = 'skill-insights-6'
+    const BUILD = 'skill-insights-7'
     /** Same-origin route registered by the Host half. */
     const ROUTE = '/skill-insights/summary'
     /**
@@ -48,6 +48,14 @@ window.__ModuleLoader__.load({
      * whatever length it actually sent.
      */
     const TREND_DAYS = 30
+    /**
+     * Page sizes offered by the list footer, smallest first — the default is the
+     * first entry. 20 is the default because it is roughly what fits in the panel
+     * without the table needing its own scrollbar, so the record arrives whole
+     * rather than cut off mid-row. 100 is effectively "everything" for a catalog
+     * of this size, which is the honest way to offer an escape from paging.
+     */
+    const PAGE_SIZES = [20, 50, 100]
 
     const zh = {
       panel: '技能管理',
@@ -78,6 +86,14 @@ window.__ModuleLoader__.load({
       srcBuiltin: '内置',
       srcLocal: '本机',
       buildTag: '构建 {build}',
+      pagerLabel: '技能列表分页',
+      pagerRange: '第 {from}–{to} 条，共 {total} 条',
+      pagerPrev: '上一页',
+      pagerNext: '下一页',
+      pagerPage: '第 {n} 页',
+      pagerCurrent: '第 {n} 页，当前页',
+      pageSizeOption: '每页 {n} 条',
+      pageSizeAria: '每页显示数量',
       today: '今天',
       yesterday: '昨天',
       daysAgo: '{days} 天前',
@@ -178,6 +194,14 @@ window.__ModuleLoader__.load({
       srcBuiltin: 'Bundled',
       srcLocal: 'Local',
       buildTag: 'build {build}',
+      pagerLabel: 'Skill list pagination',
+      pagerRange: '{from}–{to} of {total}',
+      pagerPrev: 'Previous page',
+      pagerNext: 'Next page',
+      pagerPage: 'Page {n}',
+      pagerCurrent: 'Page {n}, current page',
+      pageSizeOption: '{n} per page',
+      pageSizeAria: 'Rows per page',
       today: 'Today',
       yesterday: 'Yesterday',
       daysAgo: '{days}d ago',
@@ -542,6 +566,39 @@ body:not([data-ds-dark-theme]) .ui-page {
 /* Bottom padding closes the card under the last row, whose own border is
    removed; at 2px the table used to bleed into the card's lower edge. */
 .ui-tablewrap { padding: 0 14px 8px; }
+/* The list footer sits inside the card, under the last row, and its top rule
+   doubles as the table's bottom edge — the last row deliberately has none. The
+   side padding matches .ui-tablewrap so the range text lines up with the first
+   column rather than with the card's edge. */
+.ui-pager {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px;
+  padding: 8px 14px 9px; border-top: 0.5px solid var(--si-edge);
+  font-size: var(--si-fs-2xs); color: var(--dsw-alias-label-secondary);
+}
+.ui-pager-range { margin-right: auto; font-variant-numeric: tabular-nums; }
+.ui-pager-size { flex: none; height: 26px; padding: 0 26px 0 9px; background-size: 5px 5px, 5px 5px; }
+.ui-pager-nav { display: flex; align-items: center; gap: 1px; }
+.ui-page-btn {
+  min-width: 26px; height: 26px; padding: 0 7px;
+  border: 0.5px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--dsw-alias-label-primary);
+  font: inherit; font-size: var(--si-fs-2xs);
+  font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease;
+}
+.ui-page-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.ui-page-btn:focus-visible { outline: 2px solid var(--si-accent); outline-offset: 1px; }
+/* Three cues for "you are here" — a rule, a tint and weight — because the border
+   alone is a hairline and the tint alone is a whisper. */
+.ui-page-btn[aria-current='page'] { border-color: var(--si-edge); background: var(--si-inset); font-weight: 600; }
+.ui-page-btn:disabled { opacity: .4; cursor: default; }
+.ui-page-gap { min-width: 14px; text-align: center; }
+/* The two text buttons are the first thing to go when the row runs out of width:
+   the numbers still say where you are, and 上一页 / 下一页 are two CJK characters
+   each of pure chrome next to them. */
+@media (max-width: 560px) {
+  .ui-pager-range { flex: 1 1 100%; margin-right: 0; }
+}
 
 /* ---- table ---- */
 /* The page is the vertical scroller, not this card, so the header can stick to
@@ -763,6 +820,31 @@ body:not([data-ds-dark-theme]) .ui-page {
       const total = Number(whole) || 0
       if (total <= 0) return 0
       return Math.min(100, Math.round(((Number(part) || 0) / total) * 100))
+    }
+
+    /**
+     * The page numbers worth drawing, as numbers with `null` standing for an
+     * elided run: the first page, the last page, and the current one with one
+     * neighbour either side.
+     *
+     * Up to seven pages are all drawn. Eliding a five-page list down to "1 2 … 5"
+     * saves two buttons and costs the reader two clicks, and the two pages it
+     * hides are ones they could otherwise just look at; the window only starts
+     * earning its keep once the count outgrows a row. This catalog offers at most
+     * five pages at its smallest page size, so in practice nothing is ever elided
+     * — the branch exists for the catalog that eventually does outgrow it.
+     */
+    function pageWindow(page, count, span) {
+      const keepAll = count <= 7
+      const out = []
+      let previous = 0
+      for (let n = 1; n <= count; n += 1) {
+        if (!keepAll && n !== 1 && n !== count && Math.abs(n - page) > span) continue
+        if (previous && n - previous > 1) out.push(null)
+        out.push(n)
+        previous = n
+      }
+      return out
     }
 
     /**
@@ -1099,6 +1181,18 @@ body:not([data-ds-dark-theme]) .ui-page {
       // normal here), so allowing several open would turn the table into a
       // document; one is what keeps the record scannable.
       const [expanded, setExpanded] = React.useState(null)
+      // Paging is client-side and deliberate: the Host already sends the whole
+      // catalog because the KPI strip and the rail are statements about all of it,
+      // so a Host-side page would make those numbers depend on which page you are
+      // looking at. At 98 rows the slice costs nothing.
+      //
+      // Every setter that changes *what is listed* — tab, any filter, the search
+      // box, the sort key, the page size — also resets this to 1, because page 3
+      // of the old listing means nothing in the new one. The clamp in `safePage`
+      // below is a separate job: it is the invariant that an empty page can never
+      // be rendered, whatever the state does.
+      const [page, setPage] = React.useState(1)
+      const [pageSize, setPageSize] = React.useState(PAGE_SIZES[0])
 
       // One same-origin route on DSH's own loopback web server. No port, no
       // CORS, no credential to carry.
@@ -1220,6 +1314,18 @@ body:not([data-ds-dark-theme]) .ui-page {
           return directed !== 0 ? directed : String(a.name).localeCompare(String(b.name))
         })
       }, [allRows, query, tab, sourceFilter, timeFilter, sort, t])
+
+      // Which slice of `rows` is on screen. The clamp is what makes an empty page
+      // impossible: if a narrowing drops the listing to 30 rows while the reader
+      // sits on page 5, the last real page is shown rather than a blank table with
+      // a page number in it.
+      const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
+      const safePage = Math.min(Math.max(1, page), pageCount)
+      const pageStart = (safePage - 1) * pageSize
+      const pageRows = React.useMemo(
+        () => rows.slice(pageStart, pageStart + pageSize),
+        [rows, pageStart, pageSize],
+      )
 
       // Share bars are scaled against the whole catalog, not the filtered view,
       // so a filter does not silently restate every bar.
@@ -1424,7 +1530,10 @@ body:not([data-ds-dark-theme]) .ui-page {
               type: 'button',
               'aria-pressed': tab === key ? 'true' : 'false',
               className: tab === key ? 'ui-chip is-active' : 'ui-chip',
-              onClick: () => setTab(key),
+              onClick: () => {
+                setTab(key)
+                setPage(1)
+              },
             },
             format(t(label), { count: formatCount(tabCounts[key]) }),
           ),
@@ -1445,7 +1554,10 @@ body:not([data-ds-dark-theme]) .ui-page {
           value: query,
           placeholder: t('search'),
           'aria-label': t('search'),
-          onChange: (event) => setQuery(event.target.value),
+          onChange: (event) => {
+            setQuery(event.target.value)
+            setPage(1)
+          },
         }),
         h(
           'select',
@@ -1453,11 +1565,18 @@ body:not([data-ds-dark-theme]) .ui-page {
             className: 'ui-select',
             value: sourceFilter,
             'aria-label': t('filterSource'),
-            onChange: (event) => setSourceFilter(event.target.value),
+            onChange: (event) => {
+              setSourceFilter(event.target.value)
+              setPage(1)
+            },
           },
           h('option', { value: 'all' }, pick('filterSource', 'optAll')),
           h('option', { value: 'local' }, pick('filterSource', 'optLocal')),
-          h('option', { value: 'builtin' }, pick('filterSource', 'optBuiltin')),
+          // 'bundled', not 'builtin'. The label says 内置 and the filter compares
+          // `row.source === 'bundled'`; the value in between said neither, so
+          // choosing 内置 matched no branch and returned the whole catalog — a
+          // filter that silently meant 全部. Pinned by a check now.
+          h('option', { value: 'bundled' }, pick('filterSource', 'optBuiltin')),
         ),
         h(
           'select',
@@ -1465,7 +1584,10 @@ body:not([data-ds-dark-theme]) .ui-page {
             className: 'ui-select',
             value: timeFilter,
             'aria-label': t('filterTime'),
-            onChange: (event) => setTimeFilter(event.target.value),
+            onChange: (event) => {
+              setTimeFilter(event.target.value)
+              setPage(1)
+            },
           },
           h('option', { value: 'all' }, pick('filterTime', 'optAll')),
           h('option', { value: 'today' }, pick('filterTime', 'optToday')),
@@ -1482,6 +1604,7 @@ body:not([data-ds-dark-theme]) .ui-page {
       ]
 
       const onSort = (key) => {
+        setPage(1)
         setSort((previous) =>
           previous.key === key
             ? { key, dir: previous.dir === 'asc' ? 'desc' : 'asc' }
@@ -1528,6 +1651,93 @@ body:not([data-ds-dark-theme]) .ui-page {
         ),
       )
 
+      // The list footer. It lives inside the record's own card rather than
+      // floating below it, so it reads as part of the table's chrome instead of as
+      // a third thing between the card and the panel footer.
+      //
+      // `nav` with a label is the right landmark for paging, and the range
+      // sentence is deliberately NOT a live region: it changes on every keystroke
+      // in the search box, and a live region there would narrate the whole of a
+      // word being typed. The numbers carry `aria-current` so the current page is
+      // announced, and the active button is marked by border, tint *and* weight —
+      // no cue here is colour alone.
+      const pager =
+        rows.length === 0
+          ? null
+          : h(
+              'nav',
+              { className: 'ui-pager', 'aria-label': t('pagerLabel') },
+              h(
+                'span',
+                { className: 'ui-pager-range' },
+                format(t('pagerRange'), {
+                  from: formatCount(pageStart + 1),
+                  to: formatCount(Math.min(pageStart + pageSize, rows.length)),
+                  total: formatCount(rows.length),
+                }),
+              ),
+              h(
+                'select',
+                {
+                  className: 'ui-select ui-pager-size',
+                  value: String(pageSize),
+                  'aria-label': t('pageSizeAria'),
+                  onChange: (event) => {
+                    setPageSize(Number(event.target.value) || PAGE_SIZES[0])
+                    setPage(1)
+                  },
+                },
+                ...PAGE_SIZES.map((n) =>
+                  h('option', { key: n, value: String(n) }, format(t('pageSizeOption'), { n: formatCount(n) })),
+                ),
+              ),
+              pageCount > 1
+                ? h(
+                    'span',
+                    { className: 'ui-pager-nav' },
+                    h(
+                      'button',
+                      {
+                        className: 'ui-page-btn',
+                        type: 'button',
+                        disabled: safePage <= 1,
+                        onClick: () => setPage(safePage - 1),
+                      },
+                      t('pagerPrev'),
+                    ),
+                    ...pageWindow(safePage, pageCount, 1).map((n, index) =>
+                      n === null
+                        ? h('span', { key: `gap-${index}`, className: 'ui-page-gap', 'aria-hidden': 'true' }, '…')
+                        : h(
+                            'button',
+                            {
+                              key: n,
+                              className: 'ui-page-btn',
+                              type: 'button',
+                              'aria-current': n === safePage ? 'page' : undefined,
+                              'aria-label':
+                                n === safePage
+                                  ? format(t('pagerCurrent'), { n: formatCount(n) })
+                                  : format(t('pagerPage'), { n: formatCount(n) }),
+                              onClick: () => setPage(n),
+                            },
+                            formatCount(n),
+                          ),
+                    ),
+                    h(
+                      'button',
+                      {
+                        className: 'ui-page-btn',
+                        type: 'button',
+                        disabled: safePage >= pageCount,
+                        onClick: () => setPage(safePage + 1),
+                      },
+                      t('pagerNext'),
+                    ),
+                  )
+                : null,
+            )
+
       const body = h(
         'div',
         { className: 'ui-card' },
@@ -1543,10 +1753,13 @@ body:not([data-ds-dark-theme]) .ui-page {
               h(
                 'tbody',
                 null,
-                ...rows.flatMap((row, index) => {
+                ...pageRows.flatMap((row, index) => {
                   const calls = Number(row.calls) || 0
                   const share = shareOf(calls, peakCalls)
                   const open = expanded === row.name
+                  // `index` is page-local, so an id can repeat across pages. Only
+                  // one page is ever mounted and only one row is ever open, so the
+                  // pair an aria-controls points at is always the one on screen.
                   const detailId = `si-detail-${index}`
                   // The model/user split and the session count used to hold three
                   // columns between them. They answer follow-up questions rather
@@ -1666,6 +1879,7 @@ body:not([data-ds-dark-theme]) .ui-page {
               ),
             ),
         ),
+        pager,
       )
 
       const rail = h(

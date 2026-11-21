@@ -117,9 +117,14 @@ function flatten(node) {
   }
   if (node.type === 'style') return `<style>${flatten(node.children)}</style>`
   const props = node.props && typeof node.props === 'object' ? node.props : {}
+  // `value` and `disabled` are carried because pagination and the filters are
+  // chosen by value and gated by disabled, and both are invisible in a tree that
+  // only reports class names and text. The boolean is spelled out because in
+  // markup the attribute's presence, not its value, is what disables.
   const attrs = ` ${props.className || ''} ${props.title || ''} ${props['aria-label'] || ''}`
-  const state = ` ${props['aria-sort'] || ''} ${props['aria-expanded'] || ''}`
-  return `${String(node.type)} ${flatten(node.children)}${attrs}${state}`
+  const values = ` value="${props.value === undefined ? '' : props.value}"${props.disabled ? ' disabled' : ''}`
+  const state = ` ${props['aria-sort'] || ''} ${props['aria-expanded'] || ''} ${props['aria-current'] || ''}`
+  return `${String(node.type)} ${flatten(node.children)}${attrs}${values}${state}`
 }
 
 /** Everything after the stylesheet: the rendered markup on its own. */
@@ -377,6 +382,163 @@ assert.match(userOnly, /只能用 \/名称 显式调用，模型不会自己选�
 assert.match(userOnly, /1 个从未被调用/, 'the mode card counts the idle ones')
 assert.match(userOnly, /仅用户/, 'the row badge marks a user-only skill')
 assert.doesNotMatch(userOnly, /MISSING:/, 'the user-only path uses only real locale keys')
+
+// ---- §13: paging the list --------------------------------------------------
+// A catalog big enough to page. Call counts run high to low, so display order and
+// insertion order are the same and an assertion can talk about "the 21st row"
+// without repeating a name list. 45 rows because the page window draws every page
+// up to seven and elides above that: 45/5 = 9 pages reaches the elision, and 45/20
+// = 3 pages reaches the "draw them all" side of the same rule.
+const manyPayload = {
+  ...payload,
+  totals: { ...payload.totals, skills: 45, used: 45, calls: 1035, orphans: 0, orphanCalls: 0 },
+  skills: Array.from({ length: 45 }, (_, i) => ({
+    name: `skill-${String(i + 1).padStart(2, '0')}`,
+    calls: 45 - i,
+    model: 45 - i,
+    user: 0,
+    sessions: 1,
+    lastAt: 1791850000000,
+    trend: [1],
+    cataloged: true,
+    description: `description ${i + 1}`,
+    source: 'user-agents',
+    modelInvocable: true,
+    userInvocable: true,
+  })),
+  orphans: [],
+}
+const seed = (extra) => render([[0, 'zh'], [1, 'ready'], [2, manyPayload], ...extra])
+
+// One page draws no page control. Five rows do not need a five-button strip, and
+// the fixture is a single page, so this is also the default-state assertion.
+assert.match(markup, /第 1–3 条，共 3 条/, 'the footer states the range even when there is one page')
+assert.ok(!markup.includes('ui-pager-nav'), 'no page buttons when everything fits on one page')
+assert.match(markup, /每页 20 条/, 'the page size is offered')
+assert.match(markup, /每页 100 条/, 'a size big enough to be an escape from paging is offered')
+
+// The slice itself: page 1 stops at 20, and the page-local index must not leak
+// rows from the next page in.
+const firstPage = seed([])
+assert.match(firstPage, /第 1–20 条，共 45 条/, 'page one reports its own range')
+assert.match(firstPage, /skill-01/, 'the first row is on page one')
+assert.match(firstPage, /skill-20/, 'the 20th row is on page one')
+assert.ok(!firstPage.includes('skill-21'), 'the 21st row is not on page one')
+// Class-name assertions read `markupOf`, never the whole render: the stylesheet is
+// part of that string, so `includes('ui-pager-nav')` on the raw text is true
+// whether or not a single button was drawn. That is the same false-green mistake
+// in the other direction from the one §12.8 records, and just as silent.
+const firstPageMarkup = markupOf(firstPage)
+assert.match(firstPageMarkup, /ui-pager-nav/, 'page buttons appear once there is more than one page')
+assert.ok(!markupOf(render([[0, 'zh'], [1, 'ready'], [2, payload]])).includes('ui-pager-nav'), 'but not when the whole listing is one page')
+assert.match(firstPage, /上一页/, 'the previous-page control exists')
+assert.match(firstPage, /下一页/, 'the next-page control exists')
+assert.equal((firstPage.match(/ disabled/g) || []).length, 1, 'only the previous control is disabled on the first page')
+assert.match(firstPage, /第 1 页，当前页/, 'the current page says so in its accessible name')
+
+// Three pages draw all three. Eliding a short list saves buttons and costs clicks,
+// so the threshold has to be visible from both sides.
+const threePages = seed([[10, 2]])
+assert.match(threePages, /第 21–40 条，共 45 条/, 'a middle page of three reports its own range')
+assert.match(threePages, /第 1 页/, 'the first page is drawn')
+assert.match(threePages, /第 2 页，当前页/, 'the current page is drawn')
+assert.match(threePages, /第 3 页/, 'the last page is drawn')
+assert.ok(!markupOf(threePages).includes('ui-page-gap'), 'a short listing is not elided')
+
+const lastPage = seed([[10, 3]])
+assert.match(lastPage, /第 41–45 条，共 45 条/, 'the last page reports its own range')
+assert.match(lastPage, /skill-41/, 'the 41st row is on the last page')
+assert.ok(!lastPage.includes('skill-40'), 'the 40th row is not on the last page')
+assert.equal((lastPage.match(/ disabled/g) || []).length, 1, 'only the next control is disabled on the last page')
+
+// The clamp. A page number that no longer exists — a narrowed listing, a hostile
+// or remembered value — must show the last real page rather than an empty table
+// under a page number.
+assert.match(seed([[10, 99]]), /第 41–45 条，共 45 条/, 'a page past the end clamps to the last page')
+assert.match(render([[0, 'zh'], [1, 'ready'], [2, payload], [10, 99]]), /第 1–3 条，共 3 条/, 'clamping holds for a single-page listing')
+
+// The page window. Nine pages with the reader on page 3 keeps the first, the last,
+// and a neighbour either side, and elides the rest instead of drawing buttons that
+// grow without bound.
+const middle = seed([[10, 3], [11, 5]])
+assert.match(middle, /第 11–15 条，共 45 条/, 'a middle page reports its own range')
+assert.match(middle, /第 1 页/, 'the first page stays reachable')
+assert.match(middle, /第 9 页/, 'the last page stays reachable')
+assert.match(middle, /第 3 页，当前页/, 'the current page is marked')
+assert.ok(!middle.includes('第 5 页'), 'a page outside the window is elided')
+assert.match(markupOf(middle), /ui-page-gap/, 'the elision is drawn')
+assert.ok(!middle.includes(' disabled'), 'a middle page disables neither direction')
+
+// The threshold itself, from both sides and one page either side of it. Seven
+// pages is the largest count drawn whole, and the middle of those seven is where
+// "draw them all" and "window around the reader" actually disagree: one shows
+// 1 2 3 4 5 6 7, the other 1 3 4 5 7. Forty-five rows at seven per page is exactly
+// seven pages; at six per page it is eight pages, which is one past the edge and
+// must elide. A test at three pages cannot tell the two rules apart — that is
+// precisely how this threshold went unpinned until a mutation said so.
+const atThreshold = seed([[10, 4], [11, 7]])
+assert.match(atThreshold, /第 22–28 条，共 45 条/, 'the boundary page reports its own range')
+assert.match(atThreshold, /第 2 页/, 'seven pages still draws the second')
+assert.match(atThreshold, /第 6 页/, 'and the sixth')
+assert.match(atThreshold, /第 7 页/, 'and the seventh')
+assert.ok(!markupOf(atThreshold).includes('ui-page-gap'), 'seven pages is still drawn whole')
+
+const pastThreshold = seed([[10, 4], [11, 6]])
+assert.match(pastThreshold, /第 19–24 条，共 45 条/, 'the page past the boundary reports its own range')
+assert.match(pastThreshold, /ui-page-gap/, 'eight pages elides')
+assert.ok(!pastThreshold.includes('第 2 页'), 'and the second page is the one it hides')
+assert.match(pastThreshold, /第 8 页/, 'while the last page stays reachable')
+
+// The escape hatch: 100 rows per page is one page and no controls, which is how
+// someone who wants to scan the whole catalog gets out of paging.
+const unsliced = seed([[11, 100]])
+assert.match(unsliced, /第 1–45 条，共 45 条/, 'the largest page size shows the whole listing')
+assert.ok(!markupOf(unsliced).includes('ui-pager-nav'), 'and draws no page controls')
+
+// An empty listing has nothing to page, so the footer does not pretend otherwise.
+const noMatch = render([[0, 'zh'], [1, 'ready'], [2, payload], [4, 'zzzz-no-such-skill']])
+assert.match(markupOf(noMatch), /ui-empty/, 'a filter that matches nothing shows the empty state')
+assert.ok(!markupOf(noMatch).includes('ui-pager'), 'and no footer claiming a range of nothing')
+
+// Paging must not defeat the orphan pinning rule: pinning is a sort, the slice
+// happens after it, so orphans land on page one where they are visible.
+const pagedOrphan = render([
+  [0, 'zh'],
+  [1, 'ready'],
+  [2, { ...manyPayload, orphans: [payload.orphans[0]] }],
+])
+// Presence is asserted before order, and not as a formality: `indexOf` answers -1
+// for a row that is not rendered at all, and -1 is less than every real offset, so
+// an order-only check is satisfied by the row being *absent* — the exact failure it
+// is meant to catch. A mutation that unpinned the orphan passed here until this
+// line existed.
+const orphanAt = markupOf(pagedOrphan).indexOf('ghost-skill')
+const leadSkillAt = markupOf(pagedOrphan).indexOf('skill-01')
+assert.ok(orphanAt > -1, 'the pinned orphan is on page one at all')
+assert.ok(leadSkillAt > -1, 'and the catalog is on page one with it')
+assert.ok(orphanAt < leadSkillAt, 'a pinned orphan still precedes the catalog on page one')
+assert.ok(!pagedOrphan.includes('skill-21'), 'and the slice still applies below the pin')
+
+// The source filter. Its 内置 option once carried value="builtin" while the filter
+// compared against "bundled", so choosing it matched no branch and returned the
+// whole catalog — a filter that silently meant 全部. Both halves are pinned: the
+// option value, and that the filter actually narrows.
+const mixedPayload = {
+  ...payload,
+  skills: [
+    { ...payload.skills[0], name: 'bundled-one', source: 'bundled' },
+    { ...payload.skills[0], name: 'local-one', source: 'user-agents' },
+  ],
+  orphans: [],
+}
+const onlyBundled = render([[0, 'zh'], [1, 'ready'], [2, mixedPayload], [6, 'bundled']])
+assert.match(onlyBundled, /bundled-one/, 'filtering to bundled keeps the bundled row')
+assert.ok(!onlyBundled.includes('local-one'), 'and drops the local one')
+const onlyLocal = render([[0, 'zh'], [1, 'ready'], [2, mixedPayload], [6, 'local']])
+assert.match(onlyLocal, /local-one/, 'filtering to local keeps the local row')
+assert.ok(!onlyLocal.includes('bundled-one'), 'and drops the bundled one')
+assert.ok(!render([[0, 'zh'], [1, 'ready'], [2, mixedPayload]]).includes('value="builtin"'), 'the source option value matches what the filter compares')
+assert.match(render([[0, 'zh'], [1, 'ready'], [2, mixedPayload]]), /value="bundled"/, 'the bundled option carries the value the filter tests')
 
 // A catalog that failed discovery must announce itself.
 assert.match(render([[0, 'zh'], [1, 'ready'], [2, { ...payload, catalogComplete: false }]]), /技能目录可能不完整/)
