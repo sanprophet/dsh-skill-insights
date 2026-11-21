@@ -50,9 +50,11 @@ In your profile's `cordis.patch.yml`:
 
 ## The panel
 
-- **KPIs** — available skills, skills used, total calls (split model / user), uninstalled / unknown.
-- **Table** — skill · source · calls · model/user · sessions · last used · a 30-day mini trend. Sorted by call count descending, with **uninstalled skills pinned first** (they are the most actionable row).
-- **Filter box** and a **Show unused skills** toggle, off by default: with 70+ skills, most are zeros and they drown out the signal.
+- **Stat strip** — available skills (split local / bundled), skills used (as a share of available), total calls (split model / user), never used (and how many of those can only be called by hand). The uninstalled / unknown tile only takes a slot when it has something to report.
+- **Tabs** — All / Used / Never used, each carrying its own count.
+- **Filters** — search (matches name *and* description), source, and last-used window.
+- **Table** — skill · calls · last used · source, four columns, with sortable headers. Uninstalled skills stay pinned above the catalog under every sort order. The arrow before a skill name expands that row in place: the full description plus eight facts (first used, last used, provider, model/user split, sessions, invocability).
+- **Insight rail** — last-30-day activity (a bar chart of the whole catalog's calls), where the skills come from, and how they can be invoked (model-and-user vs user-only). On wide windows it sits beside the record; below 1060px it moves underneath it, three cards across. The split is a container query on the panel's own width, not a media query.
 - A `tracked` footer line reports how many sessions were scanned, how many were unreadable, and how many events failed to parse — so a wrong number points straight at an unfinished scan.
 
 ## Known limitations
@@ -71,7 +73,7 @@ npm test
 
 - `node index.js` — self-check for the pure `countSkills` function. Builds a synthetic event stream (two model invocations, one user invocation, one uninstalled skill, several noise events) and asserts counts, first/last use, day bucketing and the malformed-event counter; then feeds an empty array and a bare `{ type }` event to confirm it degrades instead of throwing.
 - `node check-host.mjs` — host integration check. A fake Cordis context and a throwaway `DSH_HOME` exercise the whole path a restart takes: folding two sessions into one table, the cwd union that drives catalog discovery, an unreadable session being counted instead of fatal, the snapshot the route serialises, the `405` guard, and the durable cache.
-- `node check-client.mjs` — load/render check for `client.js`. A minimal React stand-in keeps it dependency-free; it asserts the module-loader contract, both slot registrations, that the zh and en dictionaries expose identical keys, that all render paths build a tree, and that the output contains no `MISSING:` (i.e. every copy key the panel uses exists).
+- `node check-client.mjs` — load/render check for `client.js`. A minimal React stand-in keeps it dependency-free; it asserts the module-loader contract, both slot registrations, that the zh and en dictionaries expose identical keys, that all render paths build a tree, and that the output contains no `MISSING:` (i.e. every copy key the panel uses exists). It also pins the structural promises a DOM-free render can still see: that the table precedes the insight rail, that the chart prints every number its bars encode, that the disclosure names the row it opens, and that the light canvas, the warning token and the numeric font stack all resolve against the real theme.
 
 `client.js` is a hand-written browser bundle: `window.__ModuleLoader__.load` plus `react` from the frozen module table. No build step, no client package dependency.
 
